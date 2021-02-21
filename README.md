@@ -1,8 +1,8 @@
 # SDIS Project
 
-SDIS Project for group T&lt;n&gt;G&lt;p&gt;&lt;q&gt;.
+SDIS Project for group T1G06.
 
 Group members:
 
-1. &lt;first name&gt; &lt;family name&gt; (&lt;email address&gt;)
-2. &lt;first name&gt; &lt;family name&gt; (&lt;email address&gt;)
+1. Beatriz Mendes (up201806551@fe.up.pt)
+2. José Rodrigues (up201708806@fe.up.pt)
