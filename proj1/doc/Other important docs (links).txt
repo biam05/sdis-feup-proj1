@@ -1,0 +1,3 @@
+Main project document: httpsweb.fe.up.pt~pfsaulassd2021projsproj1proj1.html
+
+Concurrency Hints: https://web.fe.up.pt/~pfs/aulas/sd2021/projs/proj1/concurrency_hints.html
