@@ -45,7 +45,7 @@ public class testClient {
                 break;
             case "DELETE":
                 break;
-            case "RACLAIM":
+            case "RECLAIM":
                 break;
             case "STATE":
                 break;
