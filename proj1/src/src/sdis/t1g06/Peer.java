@@ -99,13 +99,23 @@ public class Peer implements ServiceInterface {
     public String backup(String filePath, int replicationDegree) {
         FileManager filemanager = new FileManager(filePath, replicationDegree);
 
-        /**
-         * MDB
-         *      <Version> PUTCHUNK <SenderId> <FileId> <ChunkNo> <ReplicationDeg> <CRLF><CRLF><Body>
-         *
-         * MC
-         *      <Version> STORED <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
-         */
+        for(int i = 0; i < filemanager.getChunks().size(); i++){
+            FileChunk fileChunk = filemanager.getChunks().get(i);
+            //Each file is backed up with a desired replication degree
+            //The service should try to replicate all the chunks of a file with the desired replication degree
+            fileChunk.setDesiredReplicationDegree(replicationDegree);
+
+            // header construction
+            // <Version> PUTCHUNK <SenderId> <FileId> <ChunkNo> <ReplicationDeg> <CRLF><CRLF><Body>
+            //      CRLF == \r\n
+            String header = protocol_version + " PUTCHUNK " + peer_id + " " + filemanager.getFileID()
+                    + " " + fileChunk.getChunkNo() + " " + replicationDegree + "\r\n\r\n";
+            System.out.println("> Sent: " + header);
+
+            // TODO: finish backup
+
+        }
+
 
         return null;
     }

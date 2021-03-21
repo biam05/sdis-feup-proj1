@@ -1,11 +1,11 @@
 package sdis.t1g06;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class FileManager {
     private String fileID;
@@ -18,6 +18,7 @@ public class FileManager {
         this.replicationDegree = replicationDegree;
         this.chunks = new ArrayList<>();
         this.fileID = id();
+        split();
     }
 
     public String getFileID(){
@@ -37,17 +38,31 @@ public class FileManager {
     }
 
     private void split(){
-        int chunkNo = 0;
+        int chunkNo = 1; // number of the first chunk
         int maxSize = 64000; // max size of chunk = 64kB
-        byte[] buffer = new byte[maxSize];
-        try(){
+        byte[] buffer = new byte[maxSize]; // buffer with the size of the chunk
 
+        // inside try(HERE) so "throws FileNotFound" is not necessary
+        try(FileInputStream fileInputStream = new FileInputStream(this.file);
+            BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream);){
+            int size;
+            while(bufferedInputStream.read(buffer) > 0){ // an entire chunk left (at least)
+                size = bufferedInputStream.read(buffer);
+                byte[] content = Arrays.copyOf(buffer, size); // copy content to create chunk
+                FileChunk fileChunk = new FileChunk(this.fileID, chunkNo, content, size);
+                this.chunks.add(fileChunk);
+                chunkNo++; // number of the next chunk
+                buffer = new byte[maxSize]; // prepare to get next chunk
+            }
+            // If the file size is a multiple of the chunk size, the last chunk has size 0
+            if(this.file.length() % maxSize == 0){
+                FileChunk fileChunk = new FileChunk(this.fileID, chunkNo + 1, null, 0);
+                this.chunks.add(fileChunk);
+            }
         }
-        catch(IOException e){
+        catch(Exception e){
             System.err.println("Error splitting " + this.file.getName() + " file in chunks.\n");
-            throw e;
         }
-
     }
 
     private String id(){
@@ -56,10 +71,10 @@ public class FileManager {
         String fileowner = this.file.getParent();                   // owner
 
         String originalString = filename + ":" + filedata + ":" + fileowner;
-        return sha256(originalString); // sha-256 encryptation
+        return sha256(originalString); // sha-256 encryption
     }
-    // !!!!!!!!!!!!!!!!!!
-    // Perguntar ao professor se podemos utilizar esta função
+
+    // TODO: Perguntar ao professor se podemos utilizar esta função
     // https://www.geeksforgeeks.org/sha-256-hash-in-java/
     private static String sha256(String originalString){
         try{
