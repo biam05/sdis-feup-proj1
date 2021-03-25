@@ -3,6 +3,7 @@ package sdis.t1g06;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
+import java.net.UnknownHostException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -18,6 +19,10 @@ public class Peer implements ServiceInterface {
     private static int mdb_port;
     private static String mdr_maddress;
     private static int mdr_port;
+
+    private static Channel mc;
+    private static Channel mdb;
+    private static Channel mdr;
 
     private Peer(double protocol_version, int peer_id, String service_access_point, String mc_maddress,
                  int mc_port, String mdb_maddress, int mdb_port, String mdr_maddress, int mdr_port) {
@@ -48,14 +53,14 @@ public class Peer implements ServiceInterface {
         try {
             prot_version = Double.parseDouble(args[0]);
         } catch(NumberFormatException e){
-            System.err.println("Peer exception: error parsing <protocol_version>.\n");
+            System.err.println("Peer exception: error parsing <protocol_version>.");
             return;
         }
 
         try {
             pID = Integer.parseInt(args[1]);
         } catch(NumberFormatException e){
-            System.err.println("Peer exception: error parsing <peer_id>.\n");
+            System.err.println("Peer exception: error parsing <peer_id>.");
             return;
         }
 
@@ -64,7 +69,7 @@ public class Peer implements ServiceInterface {
             mdbport = Integer.parseInt(args[6]);
             mdrport = Integer.parseInt(args[8]);
         } catch(NumberFormatException e){
-            System.err.println("Peer exception: error parsing multicast channel's ports.\n");
+            System.err.println("Peer exception: error parsing multicast channel's ports.");
             return;
         }
 
@@ -77,6 +82,23 @@ public class Peer implements ServiceInterface {
                 mdraddress, mdrport);
 
         System.out.println("> Peer Ready\n");
+
+        try {
+            openChannels();
+        } catch (UnknownHostException e) {
+            System.err.println("Peer exception: failed to open channels.");
+            return;
+        }
+    }
+
+    public static void openChannels() throws UnknownHostException {
+        mc = new Channel(mc_maddress, mc_port, "MC");
+        mdb = new Channel(mdb_maddress, mdb_port, "MDB");
+        mdr = new Channel(mdr_maddress, mdr_port, "MDR");
+
+        mc.start();
+        mdb.start();
+        mdr.start();
     }
 
     public static double getProtocolVersion() {
