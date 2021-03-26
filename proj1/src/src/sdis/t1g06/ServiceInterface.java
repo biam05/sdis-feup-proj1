@@ -4,5 +4,5 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 public interface ServiceInterface extends Remote {
-    String backup(String filePath, int replicationDegree) throws RemoteException;
+    String backup(String file_name, int replicationDegree) throws RemoteException;
 }

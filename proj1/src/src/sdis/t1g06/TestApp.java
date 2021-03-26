@@ -4,10 +4,12 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.util.Locale;
+import java.util.Scanner;
 
 public class TestApp {
 
     public static void main(String[] args) throws RemoteException {
+
         // check usage
         if (args.length < 2) {
             System.out.println("Usage: java TestApp <peer_ap> <sub_protocol> <opnds>");
@@ -18,11 +20,10 @@ public class TestApp {
         ServiceInterface stub;
 
         try {
-            Registry registry = LocateRegistry.getRegistry(host, 4445);
+            Registry registry = LocateRegistry.getRegistry(host, 1099);
             stub = (ServiceInterface) registry.lookup("ServiceInterface");
         } catch (Exception e) {
             System.err.println("TestApp: App exception: " + e.toString());
-            e.printStackTrace();
             return;
         }
 
@@ -33,7 +34,7 @@ public class TestApp {
                     System.err.println("Not enough arguments given for BACKUP operation");
                     return;
                 }
-                String filePath = args[2];
+                String file_name = args[2];
                 int replicationDegree;
                 try {
                     replicationDegree = Integer.parseInt(args[3]);
@@ -41,7 +42,7 @@ public class TestApp {
                     System.err.println("Replication degree given is not a number");
                     return;
                 }
-                String response = stub.backup(filePath, replicationDegree);
+                String response = stub.backup(file_name, replicationDegree);
                 System.out.println("response: " + response);
             }
             case "RESTORE" -> System.out.println("> TestApp: RESTORE Operation");
@@ -50,5 +51,8 @@ public class TestApp {
             case "STATE" -> System.out.println("> TestApp: STATE Operation");
             default -> System.err.println("TestApp: Invalid operation requested");
         }
+
+        Scanner myObj = new Scanner(System.in);  // Create a Scanner object
+        String userName = myObj.nextLine();  // Read user input
     }
 }

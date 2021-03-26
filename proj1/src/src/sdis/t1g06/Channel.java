@@ -14,9 +14,7 @@ public class Channel extends Thread {
     private final String name;
     private MulticastSocket channel;
 
-    private boolean isActive = false;
-    private boolean hasFailed = false;
-
+    private int timeout = 3;
     private boolean hasMessage = false;
     private DatagramPacket packet;
 
@@ -32,11 +30,14 @@ public class Channel extends Thread {
             channel = new MulticastSocket(mport);
             channel.joinGroup(maddress);
             System.out.println("> Peer " + peer_id + ": Connected to channel \"" + this.name + "\"");
-            isActive = true;
         } catch (IOException e) {
-            System.err.println("> Peer " + peer_id + ": Failed to open channel \"" + this.name + "\"");
-            isActive = true;
-            return;
+            if(timeout == 0) {
+                System.err.println("> Peer " + peer_id + ": Failed to open channel \"" + this.name + "\"");
+                System.exit(-1);
+            } else {
+                timeout--;
+                this.start();
+            }
         }
 
         while(true) {
@@ -47,12 +48,12 @@ public class Channel extends Thread {
                 channel.receive(p);
             } catch (IOException e) {
                 System.err.println("> Peer " + peer_id + ": Failed on channel \"" + this.name + "\"'s receive()");
-                return;
+                System.exit(-1);
             }
 
             // Check if packet has not been sent by himself
             String message = new String(p.getData(), 0, p.getLength());
-            String[] parts = message.split(" ");
+            String[] parts = message.split("\\s+");
             if(!parts[2].equals(String.valueOf(peer_id))) {
                 packet = p;
                 hasMessage = true;
@@ -72,16 +73,7 @@ public class Channel extends Thread {
         return packet;
     }
 
-    public boolean isActive() {
-        return isActive;
-    }
-
-    public boolean hasFailed() {
-        return hasFailed;
-    }
-
     public int sendMessage(byte[] buf) {
-        if(!isActive) return -1;
         DatagramPacket message;
         message = new DatagramPacket(buf, buf.length, this.maddress, this.mport);
 
@@ -92,7 +84,7 @@ public class Channel extends Thread {
             e.printStackTrace();
             return -1;
         }
-        System.out.println("> Peer " + peer_id + ": Sent message");
+        System.out.println("> Peer " + peer_id + ": Sent message to the \"" + this.name + "\" channel");
         return 0;
     }
 }

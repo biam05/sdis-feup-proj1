@@ -9,6 +9,8 @@ import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class Peer implements ServiceInterface {
 
@@ -94,7 +96,7 @@ public class Peer implements ServiceInterface {
         Peer peer = new Peer(prot_version, pID, saccesspoint, mcaddress, mcport, mdbaddress, mdbport,
                 mdraddress, mdrport);
 
-        if(pID == 1) peer.startRMI(); // initiator-peer
+        if(pID == 1) peer.startRMI(); // initiator-peer //TODO: O initiator-peer é indicado pelos argumentos do TestApp. Como nós vamos buscar esse valor para utilizar aqui.. Isso é um mistério de deus :|
 
         try {
             openChannels();
@@ -103,44 +105,17 @@ public class Peer implements ServiceInterface {
             return;
         }
 
-        int attempts_mc = 0, attempts_mdb = 0, attempts_mdr = 0;
-        while(!mc.isActive() || !mdb.isActive() || !mdr.isActive()) { // Peer is ready only when the 3 channels are active
-            if(mc.hasFailed())  {
-                if(attempts_mc >= 3) {
-                    System.err.println("> Peer " + pID + ": Failed to connect to \"MC\" channel");
-                    return;
-                }
-                mc.start();
-                attempts_mc++;
-            }
-            if(mdb.hasFailed()) {
-                if(attempts_mdb >= 3) {
-                    System.err.println("> Peer " + pID + ": Failed to connect to \"MDB\" channels");
-                    return;
-                }
-                mdb.start();
-                attempts_mdb++;
-            }
-            if(mdr.hasFailed()) {
-                if(attempts_mdr >= 3) {
-                    System.err.println("> Peer " + pID + ": Failed to connect to \"MDR\" channels");
-                    return;
-                }
-                mdr.start();
-                attempts_mdr++;
-            }
-        }
+        ScheduledExecutorService mdbWorkerThreads = Executors.newScheduledThreadPool(5);
 
-        ExecutorService mdbWorkerThreads = Executors.newFixedThreadPool(5);
-
-        mdbWorkerThreads.submit(() -> {
-            while(true) {
+        mdbWorkerThreads.schedule(() -> {
+            while(true) { //TODO: Acho que o problema aqui é usar se um while true.. Há que arranjar outro método de dizer ao peer que há uma mensagem a analisar :|
                 if(mdb.hasMessage()) {
                     treatMessage(mdb.getPacket());
+                    System.out.println("> Peer " + pID + ": Got msg");
                     mdb.setHasMessage(false);
                 }
             }
-        });
+        }, 0, TimeUnit.MILLISECONDS);
 
         System.out.println("> Peer " + pID + ": Ready");
     }
@@ -150,6 +125,7 @@ public class Peer implements ServiceInterface {
         String policyfilePath = "rmipolicy/my.policy/";
         System.setProperty("java.rmi.server.codebase", codeBasePath);
         System.setProperty("java.security.policy", policyfilePath);
+
         if(System.getSecurityManager() == null) {
             System.setSecurityManager(new SecurityManager());
         }
@@ -158,7 +134,7 @@ public class Peer implements ServiceInterface {
             ServiceInterface stub = (ServiceInterface) UnicastRemoteObject.exportObject(this, 0);
 
             // Bind the remote object's stub in the registry
-            Registry registry = LocateRegistry.createRegistry(4445);
+            Registry registry = LocateRegistry.createRegistry(1099);
             registry.rebind("ServiceInterface", stub);
 
             System.out.println("> Peer " + peer_id + ": RMI service registered");
@@ -216,8 +192,9 @@ public class Peer implements ServiceInterface {
      * rather than creating multiple files that are a copy of the file to backup.
      */
     @Override
-    public String backup(String filePath, int replicationDegree) {
-        FileManager filemanager = new FileManager(peer_path + filePath, replicationDegree);
+    public String backup(String file_name, int replicationDegree) {
+
+        FileManager filemanager = new FileManager(peer_path + file_name, replicationDegree);
 
         for(int i = 0; i < filemanager.getChunks().size(); i++){
             FileChunk fileChunk = filemanager.getChunks().get(i);
@@ -230,8 +207,6 @@ public class Peer implements ServiceInterface {
             //      CRLF == \r\n
             String header = protocol_version + " PUTCHUNK " + peer_id + " " + filemanager.getFileID()
                     + " " + fileChunk.getChunkNo() + " " + replicationDegree + "\r\n\r\n";
-
-            //System.out.println("> Peer " + peer_id + ": sent: " + header)
 
             byte[] message = new byte[header.getBytes().length + fileChunk.getContent().length];
             System.arraycopy(header.getBytes(), 0, message, 0, header.getBytes().length);
