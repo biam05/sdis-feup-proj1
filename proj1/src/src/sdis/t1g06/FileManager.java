@@ -46,8 +46,7 @@ public class FileManager {
         try(FileInputStream fileInputStream = new FileInputStream(this.file);
             BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream);){
             int size;
-            while(bufferedInputStream.read(buffer) > 0){ // an entire chunk left (at least)
-                size = bufferedInputStream.read(buffer);
+            while((size = bufferedInputStream.read(buffer)) > 0) { // an entire chunk left (at least)
                 byte[] content = Arrays.copyOf(buffer, size); // copy content to create chunk
                 FileChunk fileChunk = new FileChunk(this.fileID, chunkNo, content, size);
                 this.chunks.add(fileChunk);
@@ -60,21 +59,21 @@ public class FileManager {
                 this.chunks.add(fileChunk);
             }
         }
-        catch(Exception e){
+        catch(Exception e) {
             System.err.println("Error splitting " + this.file.getName() + " file in chunks.\n");
+            e.printStackTrace();
         }
     }
 
     private String id(){
         String filename = this.file.getName();                      // file name
-        String filedata = String.valueOf(this.file.lastModified()); // date modified
+        String filedate = String.valueOf(this.file.lastModified()); // date modified
         String fileowner = this.file.getParent();                   // owner
 
-        String originalString = filename + ":" + filedata + ":" + fileowner;
+        String originalString = filename + ":" + filedate + ":" + fileowner;
         return sha256(originalString); // sha-256 encryption
     }
 
-    // TODO: Perguntar ao professor se podemos utilizar esta função
     // https://www.geeksforgeeks.org/sha-256-hash-in-java/
     private static String sha256(String originalString){
         try{

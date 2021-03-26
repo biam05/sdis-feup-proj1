@@ -1,5 +1,6 @@
 package sdis.t1g06;
 
+import javax.xml.crypto.Data;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
@@ -12,9 +13,12 @@ public class Channel extends Thread {
     private final InetAddress maddress;
     private final String name;
     private MulticastSocket channel;
-    private boolean isActive = false;
 
+    private boolean isActive = false;
     private boolean hasFailed = false;
+
+    private boolean hasMessage = false;
+    private DatagramPacket packet;
 
     public Channel(int peer_id, String maddress, int mport, String name) throws UnknownHostException {
         this.peer_id = peer_id;
@@ -37,15 +41,35 @@ public class Channel extends Thread {
 
         while(true) {
             byte[] buf = new byte[64500];
-            DatagramPacket packet = new DatagramPacket(buf, buf.length);
+            DatagramPacket p = new DatagramPacket(buf, buf.length);
 
             try {
-                channel.receive(packet);
+                channel.receive(p);
             } catch (IOException e) {
                 System.err.println("> Peer " + peer_id + ": Failed on channel \"" + this.name + "\"'s receive()");
                 return;
             }
+
+            // Check if packet has not been sent by himself
+            String message = new String(p.getData(), 0, p.getLength());
+            String[] parts = message.split(" ");
+            if(!parts[2].equals(String.valueOf(peer_id))) {
+                packet = p;
+                hasMessage = true;
+            }
         }
+    }
+
+    public boolean hasMessage() {
+        return hasMessage;
+    }
+
+    public void setHasMessage(boolean hasMessage) {
+        this.hasMessage = hasMessage;
+    }
+
+    public DatagramPacket getPacket() {
+        return packet;
     }
 
     public boolean isActive() {
