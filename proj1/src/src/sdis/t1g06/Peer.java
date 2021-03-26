@@ -1,11 +1,14 @@
 package sdis.t1g06;
 
-import java.io.IOException;
-import java.net.InetAddress;
-import java.net.MulticastSocket;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.InputStreamReader;
 import java.net.UnknownHostException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
 
 public class Peer implements ServiceInterface {
 
@@ -51,16 +54,16 @@ public class Peer implements ServiceInterface {
         String saccesspoint, mcaddress, mdbaddress, mdraddress;
 
         try {
-            prot_version = Double.parseDouble(args[0]);
+            pID = Integer.parseInt(args[1]);
         } catch(NumberFormatException e){
-            System.err.println("Peer exception: error parsing <protocol_version>.");
+            System.err.println("> Peer ? exception: error parsing <peer_id>.");
             return;
         }
 
         try {
-            pID = Integer.parseInt(args[1]);
+            prot_version = Double.parseDouble(args[0]);
         } catch(NumberFormatException e){
-            System.err.println("Peer exception: error parsing <peer_id>.");
+            System.err.println("> Peer " + pID + " exception: error parsing <protocol_version>.");
             return;
         }
 
@@ -69,32 +72,66 @@ public class Peer implements ServiceInterface {
             mdbport = Integer.parseInt(args[6]);
             mdrport = Integer.parseInt(args[8]);
         } catch(NumberFormatException e){
-            System.err.println("Peer exception: error parsing multicast channel's ports.");
+            System.err.println("> Peer " + pID + " exception: error parsing multicast channel's ports.");
             return;
         }
 
-        saccesspoint = args[3];
-        mcaddress = args[5];
-        mdbaddress = args[7];
-        mdraddress = args[9];
+        saccesspoint = args[2];
+        mcaddress = args[3];
+        mdbaddress = args[5];
+        mdraddress = args[7];
 
         Peer peer = new Peer(prot_version, pID, saccesspoint, mcaddress, mcport, mdbaddress, mdbport,
                 mdraddress, mdrport);
 
-        System.out.println("> Peer Ready\n");
+        String codeBasePath = "/out/production/proj1/sdis/t1g06/";
+        String policyfilePath = "/rmipolicy/my.policy/";
+        System.setProperty("java.rmi.server.codebase", codeBasePath);
+        System.setProperty("java.security.policy", policyfilePath);
+        if(System.getSecurityManager() == null) {
+            System.setSecurityManager(new SecurityManager());
+        }
+        BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
+
+        /*try (BufferedReader br = new BufferedReader(new FileReader(policyfilePath))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                System.out.println(line);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }*/
+
+        try {
+            ServiceInterface stub = (ServiceInterface) UnicastRemoteObject.exportObject(peer, 0);
+
+            // Bind the remote object's stub in the registry
+            Registry registry = LocateRegistry.createRegistry(4445);
+            registry.rebind("ServiceInterface", stub);
+
+            System.out.println("Server ready");
+        } catch (Exception e) {
+            System.err.println("Server exception: " + e.toString());
+            e.printStackTrace();
+
+            try { input.readLine();}
+            catch (Exception es) { es.printStackTrace();}
+        }
 
         try {
             openChannels();
         } catch (UnknownHostException e) {
-            System.err.println("Peer exception: failed to open channels.");
+            System.err.println("> Peer " + pID + ": Failed to open channels.");
             return;
         }
+        System.out.println("> Peer " + pID + ": Ready");
+
     }
 
     public static void openChannels() throws UnknownHostException {
-        mc = new Channel(mc_maddress, mc_port, "MC");
-        mdb = new Channel(mdb_maddress, mdb_port, "MDB");
-        mdr = new Channel(mdr_maddress, mdr_port, "MDR");
+        mc = new Channel(peer_id, mc_maddress, mc_port, "MC");
+        mdb = new Channel(peer_id, mdb_maddress, mdb_port, "MDB");
+        mdr = new Channel(peer_id, mdr_maddress, mdr_port, "MDR");
 
         mc.start();
         mdb.start();
@@ -113,11 +150,11 @@ public class Peer implements ServiceInterface {
         return service_access_point;
     }
 
-    @Override
     /**
      * The backup service splits each file in chunks and then backs up each chunk independently,
      * rather than creating multiple files that are a copy of the file to backup.
      */
+    @Override
     public String backup(String filePath, int replicationDegree) {
         FileManager filemanager = new FileManager(filePath, replicationDegree);
 
@@ -132,7 +169,7 @@ public class Peer implements ServiceInterface {
             //      CRLF == \r\n
             String header = protocol_version + " PUTCHUNK " + peer_id + " " + filemanager.getFileID()
                     + " " + fileChunk.getChunkNo() + " " + replicationDegree + "\r\n\r\n";
-            System.out.println("> Sent: " + header);
+            System.out.println("> Peer " + peer_id + ": sent: " + header);
 
             // TODO: finish backup
 
