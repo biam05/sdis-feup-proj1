@@ -1,6 +1,7 @@
 package sdis.t1g06;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileReader;
 import java.io.InputStreamReader;
 import java.net.UnknownHostException;
@@ -84,23 +85,13 @@ public class Peer implements ServiceInterface {
         Peer peer = new Peer(prot_version, pID, saccesspoint, mcaddress, mcport, mdbaddress, mdbport,
                 mdraddress, mdrport);
 
-        String codeBasePath = "/out/production/proj1/sdis/t1g06/";
-        String policyfilePath = "/rmipolicy/my.policy/";
+        String codeBasePath = "out/production/proj1/sdis/t1g06/";
+        String policyfilePath = "rmipolicy/my.policy/";
         System.setProperty("java.rmi.server.codebase", codeBasePath);
         System.setProperty("java.security.policy", policyfilePath);
         if(System.getSecurityManager() == null) {
             System.setSecurityManager(new SecurityManager());
         }
-        BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
-
-        /*try (BufferedReader br = new BufferedReader(new FileReader(policyfilePath))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                System.out.println(line);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }*/
 
         try {
             ServiceInterface stub = (ServiceInterface) UnicastRemoteObject.exportObject(peer, 0);
@@ -109,23 +100,48 @@ public class Peer implements ServiceInterface {
             Registry registry = LocateRegistry.createRegistry(4445);
             registry.rebind("ServiceInterface", stub);
 
-            System.out.println("Server ready");
+            System.out.println("> Peer " + pID + ": RMI service registered");
         } catch (Exception e) {
-            System.err.println("Server exception: " + e.toString());
-            e.printStackTrace();
-
-            try { input.readLine();}
-            catch (Exception es) { es.printStackTrace();}
+            System.err.println("> Peer " + pID + ": Failed to registere RMI service");
+            return;
         }
 
         try {
             openChannels();
         } catch (UnknownHostException e) {
-            System.err.println("> Peer " + pID + ": Failed to open channels.");
+            System.err.println("> Peer " + pID + ": Failed to find channels");
             return;
         }
-        System.out.println("> Peer " + pID + ": Ready");
 
+        int attempts_mc = 0, attempts_mdb = 0, attempts_mdr = 0;
+        while(!mc.isActive() || !mdb.isActive() || !mdr.isActive()) {
+            if(mc.hasFailed())  {
+                if(attempts_mc >= 3) {
+                    System.err.println("> Peer " + pID + ": Failed to connect to \"MC\" channel");
+                    return;
+                }
+                mc.start();
+                attempts_mc++;
+            }
+            if(mdb.hasFailed()) {
+                if(attempts_mdb >= 3) {
+                    System.err.println("> Peer " + pID + ": Failed to connect to \"MDB\" channels");
+                    return;
+                }
+                mdb.start();
+                attempts_mdb++;
+            }
+            if(mdr.hasFailed()) {
+                if(attempts_mdr >= 3) {
+                    System.err.println("> Peer " + pID + ": Failed to connect to \"MDR\" channels");
+                    return;
+                }
+                mdr.start();
+                attempts_mdr++;
+            }
+        }
+
+        System.out.println("> Peer " + pID + ": Ready");
     }
 
     public static void openChannels() throws UnknownHostException {
@@ -156,6 +172,7 @@ public class Peer implements ServiceInterface {
      */
     @Override
     public String backup(String filePath, int replicationDegree) {
+        System.out.println("teste");
         FileManager filemanager = new FileManager(filePath, replicationDegree);
 
         for(int i = 0; i < filemanager.getChunks().size(); i++){

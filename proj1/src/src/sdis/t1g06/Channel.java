@@ -14,6 +14,8 @@ public class Channel extends Thread {
     private MulticastSocket channel;
     private boolean isActive = false;
 
+    private boolean hasFailed = false;
+
     public Channel(int peer_id, String maddress, int mport, String name) throws UnknownHostException {
         this.peer_id = peer_id;
         this.mport = mport;
@@ -25,11 +27,11 @@ public class Channel extends Thread {
         try {
             channel = new MulticastSocket(mport);
             channel.joinGroup(maddress);
+            System.out.println("> Peer " + peer_id + ": Connected to channel \"" + this.name + "\"");
             isActive = true;
-            System.out.println("> Peer " + peer_id + ": Connected to multicast socket \"" + this.name + "\"");
         } catch (IOException e) {
-            System.err.println("> Peer " + peer_id + ": Failed to open multicast socket \"" + this.name + "\"");
-            e.printStackTrace();
+            System.err.println("> Peer " + peer_id + ": Failed to open channel \"" + this.name + "\"");
+            isActive = true;
             return;
         }
 
@@ -41,10 +43,17 @@ public class Channel extends Thread {
                 channel.receive(packet);
             } catch (IOException e) {
                 System.err.println("> Peer " + peer_id + ": Failed on channel \"" + this.name + "\"'s receive()");
-                e.printStackTrace();
                 return;
             }
         }
+    }
+
+    public boolean isActive() {
+        return isActive;
+    }
+
+    public boolean hasFailed() {
+        return hasFailed;
     }
 
     public int sendMessage(byte[] buf) {
