@@ -9,7 +9,6 @@ import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 public class Peer implements ServiceInterface {
 
@@ -95,26 +94,7 @@ public class Peer implements ServiceInterface {
         Peer peer = new Peer(prot_version, pID, saccesspoint, mcaddress, mcport, mdbaddress, mdbport,
                 mdraddress, mdrport);
 
-        String codeBasePath = "out/production/proj1/sdis/t1g06/";
-        String policyfilePath = "rmipolicy/my.policy/";
-        System.setProperty("java.rmi.server.codebase", codeBasePath);
-        System.setProperty("java.security.policy", policyfilePath);
-        if(System.getSecurityManager() == null) {
-            System.setSecurityManager(new SecurityManager());
-        }
-
-        try {
-            ServiceInterface stub = (ServiceInterface) UnicastRemoteObject.exportObject(peer, 0);
-
-            // Bind the remote object's stub in the registry
-            Registry registry = LocateRegistry.createRegistry(4445);
-            registry.rebind("ServiceInterface", stub);
-
-            System.out.println("> Peer " + pID + ": RMI service registered");
-        } catch (Exception e) {
-            System.err.println("> Peer " + pID + ": Failed to registere RMI service");
-            return;
-        }
+        if(pID == 1) peer.startRMI(); // initiator-peer
 
         try {
             openChannels();
@@ -163,6 +143,28 @@ public class Peer implements ServiceInterface {
         });
 
         System.out.println("> Peer " + pID + ": Ready");
+    }
+
+    public void startRMI() {
+        String codeBasePath = "out/production/proj1/sdis/t1g06/";
+        String policyfilePath = "rmipolicy/my.policy/";
+        System.setProperty("java.rmi.server.codebase", codeBasePath);
+        System.setProperty("java.security.policy", policyfilePath);
+        if(System.getSecurityManager() == null) {
+            System.setSecurityManager(new SecurityManager());
+        }
+
+        try {
+            ServiceInterface stub = (ServiceInterface) UnicastRemoteObject.exportObject(this, 0);
+
+            // Bind the remote object's stub in the registry
+            Registry registry = LocateRegistry.createRegistry(4445);
+            registry.rebind("ServiceInterface", stub);
+
+            System.out.println("> Peer " + peer_id + ": RMI service registered");
+        } catch (Exception e) {
+            System.err.println("> Peer " + peer_id + ": Failed to register RMI service");
+        }
     }
 
     public static void treatMessage(DatagramPacket packet) {
