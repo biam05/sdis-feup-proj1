@@ -7,10 +7,14 @@ import java.nio.file.Paths;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.concurrent.ExecutorService;
+import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+
+// TODO: Tratar do state
+//  Experimentar com mais de um chunk
+//  Testar concurrency
 
 public class Peer implements ServiceInterface {
 
@@ -30,6 +34,13 @@ public class Peer implements ServiceInterface {
     private static Channel mdb;
     private static Channel mdr;
 
+    private static ScheduledExecutorService peerWorkerThreads;
+    private static ScheduledExecutorService mcWorkerThreads;
+    private static ScheduledExecutorService mdbWorkerThreads;
+    private static ScheduledExecutorService mdrWorkerThreads;
+
+    private static PeerContainer peerContainer;
+
     private Peer(double protocol_version, int peer_id, String service_access_point, String mc_maddress,
                  int mc_port, String mdb_maddress, int mdb_port, String mdr_maddress, int mdr_port) {
         Peer.protocol_version = protocol_version;
@@ -43,6 +54,8 @@ public class Peer implements ServiceInterface {
         Peer.mdb_port = mdb_port;
         Peer.mdr_maddress = mdr_maddress;
         Peer.mdr_port = mdr_port;
+
+        Peer.peerContainer = new PeerContainer();
     }
 
     public static void main(String[] args) {
@@ -85,18 +98,11 @@ public class Peer implements ServiceInterface {
         mdbaddress = args[5];
         mdraddress = args[7];
 
-        // Create peer directory
-        try {
-            Files.createDirectories(Paths.get("peer " + pID));
-        } catch (Exception e) {
-            System.err.println("> Peer " + pID + " exception: failed to create peer directory");
-            return;
-        }
+        Peer peer = new Peer(prot_version, pID, saccesspoint, mcaddress, mcport, mdbaddress, mdbport, mdraddress, mdrport);
 
-        Peer peer = new Peer(prot_version, pID, saccesspoint, mcaddress, mcport, mdbaddress, mdbport,
-                mdraddress, mdrport);
+        peer.createDirectories();
 
-        if(pID == 1) peer.startRMI(); // initiator-peer //TODO: O initiator-peer é indicado pelos argumentos do TestApp. Como nós vamos buscar esse valor para utilizar aqui.. Isso é um mistério de deus :|
+        peer.startRMI();
 
         try {
             openChannels();
@@ -105,19 +111,38 @@ public class Peer implements ServiceInterface {
             return;
         }
 
-        ScheduledExecutorService mdbWorkerThreads = Executors.newScheduledThreadPool(5);
-
-        mdbWorkerThreads.schedule(() -> {
-            while(true) { //TODO: Acho que o problema aqui é usar se um while true.. Há que arranjar outro método de dizer ao peer que há uma mensagem a analisar :|
-                if(mdb.hasMessage()) {
-                    treatMessage(mdb.getPacket());
-                    System.out.println("> Peer " + pID + ": Got msg");
-                    mdb.setHasMessage(false);
-                }
-            }
-        }, 0, TimeUnit.MILLISECONDS);
+        peerWorkerThreads = Executors.newScheduledThreadPool(1);
+        mcWorkerThreads = Executors.newScheduledThreadPool(5);
+        mdbWorkerThreads = Executors.newScheduledThreadPool(5);
+        mdrWorkerThreads = Executors.newScheduledThreadPool(5);
 
         System.out.println("> Peer " + pID + ": Ready");
+    }
+
+    public static ScheduledExecutorService getPeerWorkerThreads() {
+        return peerWorkerThreads;
+    }
+
+    public static ScheduledExecutorService getMCWorkerThreads() {
+        return mcWorkerThreads;
+    }
+
+    public static ScheduledExecutorService getMDBWorkerThreads() {
+        return mdbWorkerThreads;
+    }
+
+    public static ScheduledExecutorService getMDRWorkerThreads() {
+        return mdrWorkerThreads;
+    }
+
+    private static void createDirectories() {
+        // Create peer directory
+        try {
+            Files.createDirectories(Paths.get("peer " + peer_id + "\\files"));
+            Files.createDirectories(Paths.get("peer " + peer_id + "\\chunks"));
+        } catch (Exception e) {
+            System.err.println("> Peer " + peer_id + " exception: failed to create peer directory");
+        }
     }
 
     public void startRMI() {
@@ -134,41 +159,63 @@ public class Peer implements ServiceInterface {
             ServiceInterface stub = (ServiceInterface) UnicastRemoteObject.exportObject(this, 0);
 
             // Bind the remote object's stub in the registry
-            Registry registry = LocateRegistry.createRegistry(1099);
-            registry.rebind("ServiceInterface", stub);
+            Registry registry = LocateRegistry.getRegistry();
+            registry.bind(peer_id + "", stub);
 
             System.out.println("> Peer " + peer_id + ": RMI service registered");
         } catch (Exception e) {
             System.err.println("> Peer " + peer_id + ": Failed to register RMI service");
+            e.printStackTrace();
         }
     }
 
-    public static void treatMessage(DatagramPacket packet) {
+    // <Version> PUTCHUNK <SenderId> <FileId> <ChunkNo> <ReplicationDeg> <CRLF><CRLF><Body>
+    //      CRLF == \r\n
+    public synchronized static void treatMessage(DatagramPacket packet) {
         String message = new String(packet.getData(), 0, packet.getLength());
         String[] parts = message.split("\\s+"); // returns an array of strings (String[]) without any " " results
 
-        // <Version> PUTCHUNK <SenderId> <FileId> <ChunkNo> <ReplicationDeg> <CRLF><CRLF><Body>
-        //      CRLF == \r\n
-
         double version = Double.parseDouble(parts[0]);
-        String control = parts[1];
+        String control = parts[1].toUpperCase();
         int sender_id = Integer.parseInt(parts[2]);
         String file_id = parts[3];
         int chunk_no = Integer.parseInt(parts[4]);
-        int rep_degree = Integer.parseInt(parts[5]);
-        String content = message.substring(message.indexOf("\r\n\r\n") + 4);
 
-        if(control.equalsIgnoreCase("PUTCHUNK")) {
-            System.out.println("Chegou aqui");
-        } else {
-            System.err.println("> Peer " + peer_id + ": Message with invalid control \"" + control + "\" received");
+        //int rep_degree = Integer.parseInt(parts[5]);
+        switch (control) {
+            case "PUTCHUNK" -> {
+                String content = message.substring(message.indexOf("\r\n\r\n") + 4);
+                FileChunk chunk = new FileChunk(file_id, chunk_no, content.getBytes(), content.getBytes().length);
+                if (!peerContainer.addStoredChunk(chunk)) {
+                    System.err.println("I already have this chunk, ignoring");
+                    break;
+                }
+                Backup backup = new Backup(sender_id, chunk, peer_id);
+                backup.performBackup();
+                int response_time = new Random().nextInt(401);
+                mcWorkerThreads.schedule(() -> {
+                    String response = version + " STORED " + peer_id + " " + file_id + " " + chunk_no + "\r\n\r\n"; // <Version> STORED <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
+                    mc.sendMessage(response.getBytes());
+                    System.out.println(response_time + " ms :: " + response);
+                }, response_time, TimeUnit.MILLISECONDS);
+            }
+            case "STORED" -> {
+                for(FileManager file : peerContainer.getStoredFiles()) {
+                    if (file.getFileID().equals(file_id)) {
+                        peerContainer.incOccurences(file_id, chunk_no);
+                        System.out.println("Incremented occurence of chunk");
+                        break;
+                    }
+                }
+            }
+            default -> System.err.println("> Peer " + peer_id + ": Message with invalid control \"" + control + "\" received");
         }
     }
 
     public static void openChannels() throws UnknownHostException {
-        mc = new Channel(peer_id, mc_maddress, mc_port, "MC");
-        mdb = new Channel(peer_id, mdb_maddress, mdb_port, "MDB");
-        mdr = new Channel(peer_id, mdr_maddress, mdr_port, "MDR");
+        mc = new Channel(peer_id, mc_maddress, mc_port, mc_maddress + ":" + mc_port, ChannelType.MC);
+        mdb = new Channel(peer_id, mdb_maddress, mdb_port, mdb_maddress + ":" + mdb_port, ChannelType.MDB);
+        mdr = new Channel(peer_id, mdr_maddress, mdr_port, mdr_maddress + ":" + mdr_port, ChannelType.MDR);
 
         mc.start();
         mdb.start();
@@ -187,16 +234,19 @@ public class Peer implements ServiceInterface {
         return service_access_point;
     }
 
+    public static PeerContainer getPeerContainer(){ return peerContainer;}
+
     /**
      * The backup service splits each file in chunks and then backs up each chunk independently,
      * rather than creating multiple files that are a copy of the file to backup.
      */
     @Override
-    public String backup(String file_name, int replicationDegree) {
+    public synchronized String backup(String file_name, int replicationDegree) { // Called by the initiator peer
 
-        FileManager filemanager = new FileManager(peer_path + file_name, replicationDegree);
+        FileManager filemanager = new FileManager(peer_path + "files/" + file_name, replicationDegree);
+        peerContainer.addStoredFile(filemanager);
 
-        for(int i = 0; i < filemanager.getChunks().size(); i++){
+        for(int i = 0; i < filemanager.getChunks().size(); i++) {
             FileChunk fileChunk = filemanager.getChunks().get(i);
             //Each file is backed up with a desired replication degree
             //The service should try to replicate all the chunks of a file with the desired replication degree
@@ -208,13 +258,30 @@ public class Peer implements ServiceInterface {
             String header = protocol_version + " PUTCHUNK " + peer_id + " " + filemanager.getFileID()
                     + " " + fileChunk.getChunkNo() + " " + replicationDegree + "\r\n\r\n";
 
+            // String key = PeerContainer.createKey(filemanager.getFileID(), fileChunk.getChunkNo());
+            // if(!peerContainer.containsOccurence(key)) peerContainer.getOccurences().put(key, 0); // first time
+
             byte[] message = new byte[header.getBytes().length + fileChunk.getContent().length];
             System.arraycopy(header.getBytes(), 0, message, 0, header.getBytes().length);
             System.arraycopy(fileChunk.getContent(), 0, message, header.getBytes().length, fileChunk.getContent().length);
 
-            mdb.sendMessage(message);
+            sendMessageAndRepeatIfFail(message, filemanager, fileChunk, replicationDegree, 1);
         }
 
         return null;
+    }
+
+    private void sendMessageAndRepeatIfFail(byte[] message, FileManager filemanager, FileChunk fileChunk, int replicationDegree, int waitTime) {
+        mdb.sendMessage(message);
+        Peer.getPeerWorkerThreads().schedule(() -> {
+            if(peerContainer.getOccurences().get(PeerContainer.createKey(filemanager.getFileID(), fileChunk.getChunkNo())) < replicationDegree) {
+                if(waitTime * 2 > 16) return;
+                sendMessageAndRepeatIfFail(message, filemanager, fileChunk, replicationDegree, waitTime * 2);
+            } else updatePeerStateAboutChunk(filemanager.getFileID(), fileChunk.getChunkNo(), peerContainer.getOccurences().get(PeerContainer.createKey(filemanager.getFileID(), fileChunk.getChunkNo())));
+        }, waitTime, TimeUnit.SECONDS);
+    }
+
+    private void updatePeerStateAboutChunk(String fileID, int chunkNo, int actualRepDegree) {
+        System.out.println("Save state here, repDeg: " + actualRepDegree);
     }
 }

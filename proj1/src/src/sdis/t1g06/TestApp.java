@@ -16,12 +16,11 @@ public class TestApp {
             return;
         }
 
-        String host = "localhost";
         ServiceInterface stub;
 
         try {
-            Registry registry = LocateRegistry.getRegistry(host, 1099);
-            stub = (ServiceInterface) registry.lookup("ServiceInterface");
+            Registry registry = LocateRegistry.getRegistry();
+            stub = (ServiceInterface) registry.lookup(args[0]);
         } catch (Exception e) {
             System.err.println("TestApp: App exception: " + e.toString());
             return;

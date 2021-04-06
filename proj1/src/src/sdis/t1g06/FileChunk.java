@@ -26,6 +26,17 @@ public class FileChunk {
         this.replicationDegree = 0;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof FileChunk)) {
+            return false;
+        }
+
+        FileChunk c = (FileChunk) o;
+
+        return (this.chunkNo == c.chunkNo && this.fileID.equals(c.fileID));
+    }
+
     public String getFileID(){
         return fileID;
     }

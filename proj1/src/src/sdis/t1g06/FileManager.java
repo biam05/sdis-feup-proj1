@@ -58,8 +58,9 @@ public class FileManager {
                 FileChunk fileChunk = new FileChunk(this.fileID, chunkNo + 1, null, 0);
                 this.chunks.add(fileChunk);
             }
-        }
-        catch(Exception e) {
+        } catch (FileNotFoundException fe) {
+            System.err.println("The file " + this.file.getName() + " does not exist in this peer");
+        } catch(Exception e) {
             System.err.println("Error splitting " + this.file.getName() + " file in chunks.\n");
             e.printStackTrace();
         }
@@ -74,25 +75,16 @@ public class FileManager {
         return sha256(originalString); // sha-256 encryption
     }
 
-    // https://www.geeksforgeeks.org/sha-256-hash-in-java/
     private static String sha256(String originalString){
         try{
-            // Static getInstance method is called with hashing SHA
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            // digest() method called
-            // to calculate message digest of an input
-            // and return array of byte
-            byte[] hash = md.digest(
-                    originalString.getBytes(StandardCharsets.UTF_8));
-            BigInteger number = new BigInteger(1, hash);
-
-            // Convert message digest into hex value
-            StringBuilder hexString = new StringBuilder(number.toString(16));
-
-            // Pad with leading zeros
-            while (hexString.length() < 32)
-            {
-                hexString.insert(0, '0');
+            byte[] hash = md.digest(originalString.getBytes(StandardCharsets.UTF_8));
+            StringBuffer hexString = new StringBuffer();
+            // convert a byte array to a string of hex digits
+            for (int i = 0; i < hash.length; i++){
+                String hex = Integer.toHexString(0xff & hash[i]);
+                if(hex.length() == 1) hexString.append('0'); // 1 digit hexadecimal
+                hexString.append(hex);
             }
             return hexString.toString();
 
