@@ -7,7 +7,7 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-public class FileManager {
+public class FileManager implements Serializable {
     private String fileID;
     private File file;
     private int replicationDegree;
@@ -38,11 +38,10 @@ public class FileManager {
     }
 
     private void split(){
-        int chunkNo = 1; // number of the first chunk
+        int chunkNo = 0; // number of the first chunk
         int maxSize = 64000; // max size of chunk = 64kB
         byte[] buffer = new byte[maxSize]; // buffer with the size of the chunk
 
-        // inside try(HERE) so "throws FileNotFound" is not necessary
         try(FileInputStream fileInputStream = new FileInputStream(this.file);
             BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream);){
             int size;
@@ -93,5 +92,16 @@ public class FileManager {
             throw new RuntimeException(e);
         }
 
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof FileManager)) {
+            return false;
+        }
+
+        FileManager fm = (FileManager) o;
+
+        return this.fileID.equals(fm.fileID);
     }
 }

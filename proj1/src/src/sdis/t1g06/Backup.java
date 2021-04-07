@@ -1,8 +1,10 @@
 package sdis.t1g06;
 
-import java.io.FileWriter;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousFileChannel;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 
 public class Backup {
     private final String fileId;
@@ -18,12 +20,12 @@ public class Backup {
         this.pID = pId;
     }
 
-    public void performBackup() {
+    public synchronized void performBackup() {
         try {
-            FileWriter writer = new FileWriter("peer " + pID + "\\" + "chunks\\" + fileId + "_" + senderId + "_" + chunkNo);
-            String contentStr = new String(content, StandardCharsets.UTF_8);
-            writer.write(contentStr);
-            writer.close();
+            Path path = Path.of("peer " + pID + "\\" + "chunks\\" + fileId + "_" + senderId + "_" + chunkNo);
+            AsynchronousFileChannel fileChannel = AsynchronousFileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+            fileChannel.write(ByteBuffer.wrap(content), 0);
+            fileChannel.close();
             System.out.println("> Peer " + pID + ": saved chunk nº" + chunkNo + " of file with fileID: " + fileId);
         } catch (IOException e) {
             System.err.println("> Peer " + pID + " exception: failed to save chunk " +  chunkNo);

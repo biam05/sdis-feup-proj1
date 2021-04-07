@@ -1,6 +1,8 @@
 package sdis.t1g06;
 
-public class FileChunk {
+import java.io.Serializable;
+
+public class FileChunk implements Serializable {
     private String fileID;
     private int chunkNo;
     private int size; // max 64kB

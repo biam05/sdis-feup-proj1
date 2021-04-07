@@ -5,6 +5,7 @@ import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
 import java.net.UnknownHostException;
+import java.util.concurrent.Executors;
 
 enum ChannelType {
     MC,
@@ -70,13 +71,13 @@ public class Channel extends Thread {
             if(!parts[2].equals(String.valueOf(peer_id))) {
                 switch (channelType) {
                     case MC:
-                        Peer.getMCWorkerThreads().execute(() -> { // TODO: Verificar porque não está concurrent, channel fica preso aqui
+                        Executors.newScheduledThreadPool(10).execute(() -> {
                             System.out.println("> Peer " + Peer.getPeerID() + ": Catched message on channel " + channelType.toString() + " from peer " + parts[2]);
                             Peer.treatMessage(p);
                         });
                         break;
                     case MDB:
-                        Peer.getMDBWorkerThreads().execute(() -> {
+                        Executors.newScheduledThreadPool(5).execute(() -> {
                             System.out.println("> Peer " + Peer.getPeerID() + ": Catched message on channel " + channelType.toString() + " from peer " + parts[2]);
                             Peer.treatMessage(p);
                         });

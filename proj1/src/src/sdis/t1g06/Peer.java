@@ -55,7 +55,7 @@ public class Peer implements ServiceInterface {
         Peer.mdr_maddress = mdr_maddress;
         Peer.mdr_port = mdr_port;
 
-        Peer.peerContainer = new PeerContainer();
+        Peer.peerContainer = new PeerContainer(peer_id);
     }
 
     public static void main(String[] args) {
@@ -102,6 +102,8 @@ public class Peer implements ServiceInterface {
 
         peer.createDirectories();
 
+        peer.startAutoSave();
+
         peer.startRMI();
 
         try {
@@ -135,7 +137,7 @@ public class Peer implements ServiceInterface {
         return mdrWorkerThreads;
     }
 
-    private static void createDirectories() {
+    private void createDirectories() {
         // Create peer directory
         try {
             Files.createDirectories(Paths.get("peer " + peer_id + "\\files"));
@@ -145,7 +147,14 @@ public class Peer implements ServiceInterface {
         }
     }
 
-    public void startRMI() {
+    private synchronized void startAutoSave() {
+        peerContainer.loadState();
+        Executors.newScheduledThreadPool(1).scheduleAtFixedRate(() -> {
+            peerContainer.saveState();
+        }, 0, 3, TimeUnit.SECONDS);
+    }
+
+    private void startRMI() {
         String codeBasePath = "out/production/proj1/sdis/t1g06/";
         String policyfilePath = "rmipolicy/my.policy/";
         System.setProperty("java.rmi.server.codebase", codeBasePath);
@@ -192,27 +201,39 @@ public class Peer implements ServiceInterface {
                 }
                 Backup backup = new Backup(sender_id, chunk, peer_id);
                 backup.performBackup();
+                peerContainer.incOccurences(file_id, chunk_no);
                 int response_time = new Random().nextInt(401);
-                mcWorkerThreads.schedule(() -> {
+                Executors.newScheduledThreadPool(10).schedule(() -> {
                     String response = version + " STORED " + peer_id + " " + file_id + " " + chunk_no + "\r\n\r\n"; // <Version> STORED <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
                     mc.sendMessage(response.getBytes());
                     System.out.println(response_time + " ms :: " + response);
                 }, response_time, TimeUnit.MILLISECONDS);
             }
             case "STORED" -> {
+                boolean isOfMyInterest = false;
                 for(FileManager file : peerContainer.getStoredFiles()) {
                     if (file.getFileID().equals(file_id)) {
-                        peerContainer.incOccurences(file_id, chunk_no);
-                        System.out.println("Incremented occurence of chunk");
+                        isOfMyInterest = true;
                         break;
                     }
+                }
+                for(FileChunk chunk : peerContainer.getStoredChunks()) {
+                    if (chunk.getChunkNo() == chunk_no) {
+                        isOfMyInterest = true;
+                        break;
+                    }
+                }
+                if(isOfMyInterest) {
+                    peerContainer.incOccurences(file_id, chunk_no);
+                    System.out.println("Incremented occurence of chunk");
+                    System.out.println(peerContainer.getOccurences().get(PeerContainer.createKey(file_id, chunk_no)));
                 }
             }
             default -> System.err.println("> Peer " + peer_id + ": Message with invalid control \"" + control + "\" received");
         }
     }
 
-    public static void openChannels() throws UnknownHostException {
+    public synchronized static void openChannels() throws UnknownHostException {
         mc = new Channel(peer_id, mc_maddress, mc_port, mc_maddress + ":" + mc_port, ChannelType.MC);
         mdb = new Channel(peer_id, mdb_maddress, mdb_port, mdb_maddress + ":" + mdb_port, ChannelType.MDB);
         mdr = new Channel(peer_id, mdr_maddress, mdr_port, mdr_maddress + ":" + mdr_port, ChannelType.MDR);
@@ -234,7 +255,7 @@ public class Peer implements ServiceInterface {
         return service_access_point;
     }
 
-    public static PeerContainer getPeerContainer(){ return peerContainer;}
+    public synchronized static PeerContainer getPeerContainer(){ return peerContainer;}
 
     /**
      * The backup service splits each file in chunks and then backs up each chunk independently,
@@ -244,6 +265,10 @@ public class Peer implements ServiceInterface {
     public synchronized String backup(String file_name, int replicationDegree) { // Called by the initiator peer
 
         FileManager filemanager = new FileManager(peer_path + "files/" + file_name, replicationDegree);
+        if(peerContainer.getStoredFiles().contains(filemanager)) {
+            System.out.println("This file is already backed up, ignoring command");
+            return "Unsuccessful BACKUP of file " + file_name + ", backup of this file already exists";
+        }
         peerContainer.addStoredFile(filemanager);
 
         for(int i = 0; i < filemanager.getChunks().size(); i++) {
@@ -268,12 +293,12 @@ public class Peer implements ServiceInterface {
             sendMessageAndRepeatIfFail(message, filemanager, fileChunk, replicationDegree, 1);
         }
 
-        return null;
+        return "Successful BACKUP of file " + file_name;
     }
 
-    private void sendMessageAndRepeatIfFail(byte[] message, FileManager filemanager, FileChunk fileChunk, int replicationDegree, int waitTime) {
+    private synchronized void sendMessageAndRepeatIfFail(byte[] message, FileManager filemanager, FileChunk fileChunk, int replicationDegree, int waitTime) {
         mdb.sendMessage(message);
-        Peer.getPeerWorkerThreads().schedule(() -> {
+        Executors.newScheduledThreadPool(10).schedule(() -> {
             if(peerContainer.getOccurences().get(PeerContainer.createKey(filemanager.getFileID(), fileChunk.getChunkNo())) < replicationDegree) {
                 if(waitTime * 2 > 16) return;
                 sendMessageAndRepeatIfFail(message, filemanager, fileChunk, replicationDegree, waitTime * 2);
@@ -281,7 +306,8 @@ public class Peer implements ServiceInterface {
         }, waitTime, TimeUnit.SECONDS);
     }
 
-    private void updatePeerStateAboutChunk(String fileID, int chunkNo, int actualRepDegree) {
+    private synchronized void updatePeerStateAboutChunk(String fileID, int chunkNo, int actualRepDegree) {
+        peerContainer.saveState();
         System.out.println("Save state here, repDeg: " + actualRepDegree);
     }
 }

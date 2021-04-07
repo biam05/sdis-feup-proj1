@@ -1,19 +1,66 @@
 package sdis.t1g06;
 
+import java.io.*;
+import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousFileChannel;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class PeerContainer {
+public class PeerContainer implements Serializable {
+    private int pID;
     private ArrayList<FileManager> storedFiles;
     private ArrayList<FileChunk> storedChunks;
     private ConcurrentHashMap<String, Integer> occurences;
     private int freeSpace;
 
-    public PeerContainer(){
+    public PeerContainer(int pid){
         this.storedFiles = getFilesFromFolder(null);
         this.storedChunks = getChunksFromFolder(null);
         this.freeSpace = 8 * 1000000;
         this.occurences = new ConcurrentHashMap<>();
+        this.pID = pid;
+    }
+
+    public synchronized void saveState() {
+        try {
+            FileOutputStream stateFileOut = new FileOutputStream("peer " + pID + "/state.ser");
+            ObjectOutputStream out = new ObjectOutputStream(stateFileOut);
+            out.writeObject(this);
+            out.close();
+            stateFileOut.close();
+            //System.out.println("Serialized state saved in /peer " + pID + "/state.ser");
+        } catch (IOException i) {
+            System.err.println("Failed to save serialized state of peer " + pID);
+            i.printStackTrace();
+        }
+    }
+
+    public synchronized void loadState() {
+        PeerContainer peerContainer = null;
+        try {
+            FileInputStream stateFileIn = new FileInputStream("peer " + pID + "/state.ser");
+            ObjectInputStream in = new ObjectInputStream(stateFileIn);
+            peerContainer = (PeerContainer) in.readObject();
+            in.close();
+            stateFileIn.close();
+            System.out.println("Serialized state of peer " + pID + " loaded successfully");
+        } catch (Exception i) {
+            System.out.println("State file of peer " + pID + " not found, a new one will be created");
+            this.saveState();
+            return;
+        }
+
+        pID = peerContainer.getPeerID();
+        storedFiles = peerContainer.getStoredFiles();
+        storedChunks = peerContainer.getStoredChunks();
+        occurences = peerContainer.getOccurences();
+        freeSpace = peerContainer.getFreeSpace();
+    }
+
+    public int getPeerID() {
+        return pID;
     }
 
     public static ArrayList<FileManager> getFilesFromFolder(State state){
