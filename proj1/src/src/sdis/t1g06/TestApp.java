@@ -30,7 +30,7 @@ public class TestApp {
             case "BACKUP" -> {
                 System.out.println("> TestApp: BACKUP Operation");
                 if (args.length != 4) {
-                    System.err.println("Not enough arguments given for BACKUP operation");
+                    System.err.println("Wrong number of arguments given for BACKUP operation");
                     return;
                 }
                 String file_name = args[2];
@@ -44,7 +44,16 @@ public class TestApp {
                 String response = stub.backup(file_name, replicationDegree);
                 System.out.println("response: " + response);
             }
-            case "RESTORE" -> System.out.println("> TestApp: RESTORE Operation");
+            case "RESTORE" -> {
+                System.out.println("> TestApp: RESTORE Operation");
+                if (args.length != 3) {
+                    System.err.println("Wrong number of arguments given for RESTORE operation");
+                    return;
+                }
+                String file_name = args[2];
+                String response = stub.restore(file_name);
+                System.out.println("response: " + response);
+            }
             case "DELETE" -> System.out.println("> TestApp: DELETE Operation");
             case "RECLAIM" -> System.out.println("> TestApp: RECLAIM Operation");
             case "STATE" -> System.out.println("> TestApp: STATE Operation");

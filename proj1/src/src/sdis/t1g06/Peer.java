@@ -1,20 +1,26 @@
 package sdis.t1g06;
 
+import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.UnknownHostException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-// TODO: Tratar do state
-//  Experimentar com mais de um chunk
-//  Testar concurrency
+// TODO: Fazer função que ao iniciar um peer verifica se o ficheiro state existe, senão, verifica todos os ficheiros da pasta files e adiciona ao storedFiles
+//  Fazendo isso, é preciso também na função backup alterar a forma como verifica se um ficheiro já foi backed up. Utilizar o occurencies do peerContainer
+//  ConcurrentHashMaps para acompanhar se o processo de algum subprotocolo ainda decorre, utilizando o key fileid e o value um boolean. Caso o chunk recebido
+//  tenha tamanho menor que os 64k, mudar pra false, e ignorar msgs seguintes
+//  Separar funções treatMessage por channels
 
 public class Peer implements ServiceInterface {
 
@@ -33,11 +39,6 @@ public class Peer implements ServiceInterface {
     private static Channel mc;
     private static Channel mdb;
     private static Channel mdr;
-
-    private static ScheduledExecutorService peerWorkerThreads;
-    private static ScheduledExecutorService mcWorkerThreads;
-    private static ScheduledExecutorService mdbWorkerThreads;
-    private static ScheduledExecutorService mdrWorkerThreads;
 
     private static PeerContainer peerContainer;
 
@@ -113,28 +114,7 @@ public class Peer implements ServiceInterface {
             return;
         }
 
-        peerWorkerThreads = Executors.newScheduledThreadPool(1);
-        mcWorkerThreads = Executors.newScheduledThreadPool(5);
-        mdbWorkerThreads = Executors.newScheduledThreadPool(5);
-        mdrWorkerThreads = Executors.newScheduledThreadPool(5);
-
         System.out.println("> Peer " + pID + ": Ready");
-    }
-
-    public static ScheduledExecutorService getPeerWorkerThreads() {
-        return peerWorkerThreads;
-    }
-
-    public static ScheduledExecutorService getMCWorkerThreads() {
-        return mcWorkerThreads;
-    }
-
-    public static ScheduledExecutorService getMDBWorkerThreads() {
-        return mdbWorkerThreads;
-    }
-
-    public static ScheduledExecutorService getMDRWorkerThreads() {
-        return mdrWorkerThreads;
     }
 
     private void createDirectories() {
@@ -200,13 +180,13 @@ public class Peer implements ServiceInterface {
                     break;
                 }
                 Backup backup = new Backup(sender_id, chunk, peer_id);
+                peerContainer.decFreeSpace(chunk.getSize());
                 backup.performBackup();
                 peerContainer.incOccurences(file_id, chunk_no);
                 int response_time = new Random().nextInt(401);
                 Executors.newScheduledThreadPool(10).schedule(() -> {
                     String response = version + " STORED " + peer_id + " " + file_id + " " + chunk_no + "\r\n\r\n"; // <Version> STORED <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
                     mc.sendMessage(response.getBytes());
-                    System.out.println(response_time + " ms :: " + response);
                 }, response_time, TimeUnit.MILLISECONDS);
             }
             case "STORED" -> {
@@ -227,6 +207,67 @@ public class Peer implements ServiceInterface {
                     peerContainer.incOccurences(file_id, chunk_no);
                     System.out.println("Incremented occurence of chunk");
                     System.out.println(peerContainer.getOccurences().get(PeerContainer.createKey(file_id, chunk_no)));
+                }
+            }
+            case "GETCHUNK" -> {
+                for(FileChunk chunk : peerContainer.getStoredChunks()) {
+                    if (chunk.getFileID().equals(file_id) && chunk.getChunkNo() == chunk_no) {
+                        int response_time = new Random().nextInt(401);
+                        String header = version + " CHUNK " + peer_id + " " + file_id + " " + chunk_no + "\r\n\r\n"; // <Version> CHUNK <SenderId> <FileId> <ChunkNo> <CRLF><CRLF><Body>
+                        byte[] response = new byte[header.getBytes().length + chunk.getContent().length];
+                        System.arraycopy(header.getBytes(), 0, response, 0, header.getBytes().length);
+                        System.arraycopy(chunk.getContent(), 0, response, header.getBytes().length, chunk.getContent().length);
+                        Executors.newScheduledThreadPool(10).schedule(() -> {
+                            mdr.sendMessage(response);
+                            System.out.println(response_time + " ms :: " + Arrays.toString(response));
+                        }, response_time, TimeUnit.MILLISECONDS);
+                        break;
+                    }
+                }
+            }
+            case "CHUNK" -> {
+                for(FileManager file : peerContainer.getStoredFiles()) {
+                    if(file.getFileID().equals(file_id)) {
+                        boolean fileRestorationHasAlreadyStarted = false;
+                        FileManager restored_file = new FileManager(peer_path + "files/restored_" + file.getFile().getName(), 0);
+                        for(FileManager tmp : peerContainer.getStoredFiles()) {
+                            if(tmp.getFile().getName().equals(restored_file.getFile().getName())) {
+                                fileRestorationHasAlreadyStarted = true;
+                                restored_file = tmp;
+                                break;
+                            }
+                        }
+                        if(!fileRestorationHasAlreadyStarted)
+                            peerContainer.addStoredFile(restored_file);
+                        if(!restored_file.getFile().exists()) {
+                            try {
+                                if(!restored_file.getFile().createNewFile()) throw new FileAlreadyExistsException("");
+                            } catch (FileAlreadyExistsException e) {
+                                System.err.println("> Peer " + peer_id + ": Schrödinger's file, both exists and doesn't at the same time");
+                                return;
+                            } catch (IOException e) {
+                                System.err.println("> Peer " + peer_id + ": Failed to create restored file");
+                                return;
+                            }
+                        }
+                        boolean chunkAlreadyReceived = false;
+                        for(FileChunk chunk : restored_file.getChunks()) {
+                            if(chunk.getChunkNo() == chunk_no) {
+                                chunkAlreadyReceived = true;
+                                System.out.println("> Peer " + peer_id + ": Chunk nº" + chunk_no + " already processed, ignoring repeat");
+                                break;
+                            }
+                        }
+                        if(!chunkAlreadyReceived) {
+                            String content = message.substring(message.indexOf("\r\n\r\n") + 4);
+                            FileChunk chunk = new FileChunk(restored_file.getFileID(), chunk_no, content.getBytes(), content.getBytes().length);
+                            restored_file.getChunks().add(chunk);
+                            System.out.println("Chunk nº" + chunk.getChunkNo() + " size: " + chunk.getSize());
+                            if(restored_file.getChunks().size() == file.getChunks().size())
+                                restored_file.createFile(Path.of(peer_path + "files/restored_" + file.getFile().getName()), peer_id);
+                        }
+                        break;
+                    }
                 }
             }
             default -> System.err.println("> Peer " + peer_id + ": Message with invalid control \"" + control + "\" received");
@@ -281,29 +322,57 @@ public class Peer implements ServiceInterface {
             // <Version> PUTCHUNK <SenderId> <FileId> <ChunkNo> <ReplicationDeg> <CRLF><CRLF><Body>
             //      CRLF == \r\n
             String header = protocol_version + " PUTCHUNK " + peer_id + " " + filemanager.getFileID()
-                    + " " + fileChunk.getChunkNo() + " " + replicationDegree + "\r\n\r\n";
-
-            // String key = PeerContainer.createKey(filemanager.getFileID(), fileChunk.getChunkNo());
-            // if(!peerContainer.containsOccurence(key)) peerContainer.getOccurences().put(key, 0); // first time
+                    + " " + fileChunk.getChunkNo() + " " + replicationDegree + " \r\n\r\n";
 
             byte[] message = new byte[header.getBytes().length + fileChunk.getContent().length];
             System.arraycopy(header.getBytes(), 0, message, 0, header.getBytes().length);
             System.arraycopy(fileChunk.getContent(), 0, message, header.getBytes().length, fileChunk.getContent().length);
 
-            sendMessageAndRepeatIfFail(message, filemanager, fileChunk, replicationDegree, 1);
+            sendMessagePUTCHUNKProtocol(message, filemanager, fileChunk, replicationDegree, 1);
         }
 
         return "Successful BACKUP of file " + file_name;
     }
 
-    private synchronized void sendMessageAndRepeatIfFail(byte[] message, FileManager filemanager, FileChunk fileChunk, int replicationDegree, int waitTime) {
+    @Override
+    public String restore(String file_name) throws RemoteException {
+        for(FileManager file : peerContainer.getStoredFiles()) {
+            if(file.getFile().getName().equals(file_name)) {
+                for(FileChunk chunk : file.getChunks()) {
+                    // header construction
+                    // <Version> GETCHUNK <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
+                    //      CRLF == \r\n
+                    String header = protocol_version + " GETCHUNK " + peer_id + " " + file.getFileID() + " " +
+                            chunk.getChunkNo() + " \r\n\r\n";
+
+                    byte[] message = header.getBytes();
+
+                    sendMessageGETCHUNKProtocol(message);
+                }
+                break;
+            }
+        }
+
+
+
+
+
+
+        return "Successful RESTORE of file " + file_name;
+    }
+
+    private synchronized void sendMessagePUTCHUNKProtocol(byte[] message, FileManager filemanager, FileChunk fileChunk, int replicationDegree, int waitTime) {
         mdb.sendMessage(message);
         Executors.newScheduledThreadPool(10).schedule(() -> {
             if(peerContainer.getOccurences().get(PeerContainer.createKey(filemanager.getFileID(), fileChunk.getChunkNo())) < replicationDegree) {
                 if(waitTime * 2 > 16) return;
-                sendMessageAndRepeatIfFail(message, filemanager, fileChunk, replicationDegree, waitTime * 2);
+                sendMessagePUTCHUNKProtocol(message, filemanager, fileChunk, replicationDegree, waitTime * 2);
             } else updatePeerStateAboutChunk(filemanager.getFileID(), fileChunk.getChunkNo(), peerContainer.getOccurences().get(PeerContainer.createKey(filemanager.getFileID(), fileChunk.getChunkNo())));
         }, waitTime, TimeUnit.SECONDS);
+    }
+
+    private synchronized void sendMessageGETCHUNKProtocol(byte[] message) {
+        mc.sendMessage(message);
     }
 
     private synchronized void updatePeerStateAboutChunk(String fileID, int chunkNo, int actualRepDegree) {

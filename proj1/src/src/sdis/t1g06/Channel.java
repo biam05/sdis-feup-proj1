@@ -69,22 +69,10 @@ public class Channel extends Thread {
             String message = new String(p.getData(), 0, p.getLength());
             String[] parts = message.split("\\s+");
             if(!parts[2].equals(String.valueOf(peer_id))) {
-                switch (channelType) {
-                    case MC:
-                        Executors.newScheduledThreadPool(10).execute(() -> {
-                            System.out.println("> Peer " + Peer.getPeerID() + ": Catched message on channel " + channelType.toString() + " from peer " + parts[2]);
-                            Peer.treatMessage(p);
-                        });
-                        break;
-                    case MDB:
-                        Executors.newScheduledThreadPool(5).execute(() -> {
-                            System.out.println("> Peer " + Peer.getPeerID() + ": Catched message on channel " + channelType.toString() + " from peer " + parts[2]);
-                            Peer.treatMessage(p);
-                        });
-                        break;
-                    case MDR:
-                        break;
-                }
+                Executors.newScheduledThreadPool(10).execute(() -> {
+                    System.out.println("> Peer " + Peer.getPeerID() + ": Catched message on channel " + channelType.toString() + " from peer " + parts[2]);
+                    Peer.treatMessage(p);
+                });
             }
         }
     }
