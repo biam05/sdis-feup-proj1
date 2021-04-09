@@ -90,6 +90,10 @@ public class PeerContainer implements Serializable {
         return true;
     }
 
+    public synchronized void deleteStoredChunk(FileChunk chunk){
+        this.storedChunks.removeIf(storedChunk -> storedChunk == chunk);
+    }
+
     public static String createKey(String fileID, int chunkNo){
         return fileID + "/" + chunkNo;
     }

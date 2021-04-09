@@ -23,3 +23,4 @@ sleep 0.5
 echo "--------- Starting testApp ---------"
 start java  -classpath src/out/production/proj1 sdis.t1g06.TestApp 1 BACKUP circle.jpg 1
 #start java  -classpath src/out/production/proj1 sdis.t1g06.TestApp 1 RESTORE circle.jpg
+#start java  -classpath src/out/production/proj1 sdis.t1g06.TestApp 1 DELETE circle.jpg

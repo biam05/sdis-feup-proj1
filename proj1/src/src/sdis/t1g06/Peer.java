@@ -270,6 +270,14 @@ public class Peer implements ServiceInterface {
                     }
                 }
             }
+            case "DELETE" -> {
+                for(FileChunk chunk : peerContainer.getStoredChunks()) {
+                    if (chunk.getFileID().equals(file_id) && chunk.getChunkNo() == chunk_no) {
+                        peerContainer.incFreeSpace(chunk.getFileID(), chunk.getChunkNo());
+                        peerContainer.deleteStoredChunk(chunk);
+                    }
+                }
+            }
             default -> System.err.println("> Peer " + peer_id + ": Message with invalid control \"" + control + "\" received");
         }
     }
@@ -352,13 +360,28 @@ public class Peer implements ServiceInterface {
                 break;
             }
         }
-
-
-
-
-
-
         return "Successful RESTORE of file " + file_name;
+    }
+
+    @Override
+    public String delete(String file_name) throws RemoteException{
+        for(FileManager file : peerContainer.getStoredFiles()) {
+            if(file.getFile().getName().equals(file_name)) {
+                for(FileChunk chunk : file.getChunks()) {
+                    // header construction
+                    // <Version> DELETE <SenderId> <FileId> <CRLF><CRLF>
+                    //      CRLF == \r\n
+                    String header = protocol_version + " DELETE " + peer_id + " " + file.getFileID() +
+                            " \r\n\r\n";
+
+                    byte[] message = header.getBytes();
+
+                    sendMessageDELETEProtocol(message);
+                }
+                break;
+            }
+        }
+        return "Successful DELETION of file " + file_name;
     }
 
     private synchronized void sendMessagePUTCHUNKProtocol(byte[] message, FileManager filemanager, FileChunk fileChunk, int replicationDegree, int waitTime) {
@@ -372,6 +395,10 @@ public class Peer implements ServiceInterface {
     }
 
     private synchronized void sendMessageGETCHUNKProtocol(byte[] message) {
+        mc.sendMessage(message);
+    }
+
+    private synchronized void sendMessageDELETEProtocol(byte[] message) {
         mc.sendMessage(message);
     }
 
