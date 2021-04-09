@@ -112,7 +112,6 @@ public class FileManager implements Serializable {
 
     public synchronized void createFile(Path path, int pID) {
         byte[] content = new byte[0];
-        System.out.println("Chunks size: " + chunks.size());
         for(int i = 0; i < chunks.size(); i++) {
             for (FileChunk chunk : chunks) {
                 if(chunk.getChunkNo() == i) {
@@ -121,13 +120,10 @@ public class FileManager implements Serializable {
                     content = new byte[tmp.length + chunk.getContent().length];
                     System.arraycopy(tmp, 0, content, 0, tmp.length);
                     System.arraycopy(chunk.getContent(), 0, content, tmp.length, chunk.getContent().length);
-                    System.out.println("Added chunk nº" + chunk.getChunkNo());
                     break;
                 }
             }
         }
-
-        System.out.println("Content size: " + content.length);
 
         try {
             AsynchronousFileChannel fileChannel = AsynchronousFileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE);

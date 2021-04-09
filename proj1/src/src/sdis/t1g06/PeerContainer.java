@@ -1,6 +1,8 @@
 package sdis.t1g06;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -91,7 +93,13 @@ public class PeerContainer implements Serializable {
     }
 
     public synchronized void deleteStoredChunk(FileChunk chunk){
-        this.storedChunks.removeIf(storedChunk -> storedChunk == chunk);
+        try {
+            Files.deleteIfExists(Path.of("peer " + pID + "\\" + "chunks\\" + chunk.getFileID() + "_" + chunk.getChunkNo()));
+            System.out.println("> Peer " + pID + ": Succeeded to delete chunk " + chunk.getChunkNo());
+        } catch (IOException e) {
+            System.err.println("> Peer " + pID + ": Failed to delete chunk " + chunk.getChunkNo());
+            e.printStackTrace();
+        }
     }
 
     public static String createKey(String fileID, int chunkNo){

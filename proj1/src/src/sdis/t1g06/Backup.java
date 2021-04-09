@@ -8,13 +8,11 @@ import java.nio.file.StandardOpenOption;
 
 public class Backup {
     private final String fileId;
-    private final int senderId;
     private final int chunkNo;
     private final byte[] content;
     private final int pID;
-    public Backup(int senderId, FileChunk chunk, int pId){
+    public Backup(FileChunk chunk, int pId){
         this.fileId = chunk.getFileID();
-        this.senderId = senderId;
         this.chunkNo = chunk.getChunkNo();
         this.content = chunk.getContent();
         this.pID = pId;
@@ -22,7 +20,7 @@ public class Backup {
 
     public synchronized void performBackup() {
         try {
-            Path path = Path.of("peer " + pID + "\\" + "chunks\\" + fileId + "_" + senderId + "_" + chunkNo);
+            Path path = Path.of("peer " + pID + "\\" + "chunks\\" + fileId + "_" + chunkNo);
             AsynchronousFileChannel fileChannel = AsynchronousFileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
             fileChannel.write(ByteBuffer.wrap(content), 0);
             fileChannel.close();
