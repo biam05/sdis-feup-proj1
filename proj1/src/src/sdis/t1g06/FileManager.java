@@ -42,7 +42,7 @@ public class FileManager implements Serializable {
         return chunks;
     }
 
-    private void split() {
+    private synchronized void split() {
         int chunkNo = 0; // number of the first chunk
         int maxSize = CHUNK_MAX_SIZE; // max size of chunk = 64kB
         byte[] buffer = new byte[maxSize]; // buffer with the size of the chunk
@@ -70,7 +70,7 @@ public class FileManager implements Serializable {
         }
     }
 
-    private String id(){
+    private synchronized String id(){
         String filename = this.file.getName();                      // file name
         String filedate = String.valueOf(this.file.lastModified()); // date modified
         String fileowner = this.file.getParent();                   // owner
@@ -79,7 +79,7 @@ public class FileManager implements Serializable {
         return sha256(originalString); // sha-256 encryption
     }
 
-    private static String sha256(String originalString){
+    private synchronized static String sha256(String originalString){
         try{
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] hash = md.digest(originalString.getBytes(StandardCharsets.UTF_8));
@@ -110,7 +110,7 @@ public class FileManager implements Serializable {
         return this.fileID.equals(fm.fileID);
     }
 
-    public void createFile(Path path, int pID) {
+    public synchronized void createFile(Path path, int pID) {
         byte[] content = new byte[0];
         System.out.println("Chunks size: " + chunks.size());
         for(int i = 0; i < chunks.size(); i++) {

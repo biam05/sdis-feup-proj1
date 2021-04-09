@@ -14,6 +14,7 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 // TODO: Fazer função que ao iniciar um peer verifica se o ficheiro state existe, senão, verifica todos os ficheiros da pasta files e adiciona ao storedFiles
@@ -129,7 +130,7 @@ public class Peer implements ServiceInterface {
 
     private synchronized void startAutoSave() {
         peerContainer.loadState();
-        Executors.newScheduledThreadPool(1).scheduleAtFixedRate(() -> {
+        Executors.newScheduledThreadPool(5).scheduleAtFixedRate(() -> {
             peerContainer.saveState();
         }, 0, 3, TimeUnit.SECONDS);
     }
@@ -173,6 +174,7 @@ public class Peer implements ServiceInterface {
         //int rep_degree = Integer.parseInt(parts[5]);
         switch (control) {
             case "PUTCHUNK" -> {
+                //byte[] content = getBody(packet.getData());
                 String content = message.substring(message.indexOf("\r\n\r\n") + 4);
                 FileChunk chunk = new FileChunk(file_id, chunk_no, content.getBytes(), content.getBytes().length);
                 if (!peerContainer.addStoredChunk(chunk)) {
@@ -184,7 +186,7 @@ public class Peer implements ServiceInterface {
                 backup.performBackup();
                 peerContainer.incOccurences(file_id, chunk_no);
                 int response_time = new Random().nextInt(401);
-                Executors.newScheduledThreadPool(10).schedule(() -> {
+                new ScheduledThreadPoolExecutor(200).schedule(() -> {
                     String response = version + " STORED " + peer_id + " " + file_id + " " + chunk_no + "\r\n\r\n"; // <Version> STORED <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
                     mc.sendMessage(response.getBytes());
                 }, response_time, TimeUnit.MILLISECONDS);
@@ -206,7 +208,7 @@ public class Peer implements ServiceInterface {
                 if(isOfMyInterest) {
                     peerContainer.incOccurences(file_id, chunk_no);
                     System.out.println("Incremented occurence of chunk");
-                    System.out.println(peerContainer.getOccurences().get(PeerContainer.createKey(file_id, chunk_no)));
+                    System.out.println(peerContainer.getOccurrences().get(PeerContainer.createKey(file_id, chunk_no)));
                 }
             }
             case "GETCHUNK" -> {
@@ -217,7 +219,7 @@ public class Peer implements ServiceInterface {
                         byte[] response = new byte[header.getBytes().length + chunk.getContent().length];
                         System.arraycopy(header.getBytes(), 0, response, 0, header.getBytes().length);
                         System.arraycopy(chunk.getContent(), 0, response, header.getBytes().length, chunk.getContent().length);
-                        Executors.newScheduledThreadPool(10).schedule(() -> {
+                        new ScheduledThreadPoolExecutor(200).schedule(() -> {
                             mdr.sendMessage(response);
                             System.out.println(response_time + " ms :: " + Arrays.toString(response));
                         }, response_time, TimeUnit.MILLISECONDS);
@@ -259,6 +261,7 @@ public class Peer implements ServiceInterface {
                             }
                         }
                         if(!chunkAlreadyReceived) {
+                            //byte[] content = getBody(packet.getData());
                             String content = message.substring(message.indexOf("\r\n\r\n") + 4);
                             FileChunk chunk = new FileChunk(restored_file.getFileID(), chunk_no, content.getBytes(), content.getBytes().length);
                             restored_file.getChunks().add(chunk);
@@ -282,14 +285,25 @@ public class Peer implements ServiceInterface {
         }
     }
 
+    private static byte[] getBody(byte[] message) {
+        byte[] content = new byte[FileManager.CHUNK_MAX_SIZE];
+        for(int i = 0; i < message.length - 3; i++) {
+            if(message[i] == 0xD && message[i+1] == 0xA && message[i+2] == 0xD && message[i+3] == 0xA) {
+                content = Arrays.copyOfRange(message, i+4, message.length - 1);
+                break;
+            }
+        }
+        return content;
+    }
+
     public synchronized static void openChannels() throws UnknownHostException {
         mc = new Channel(peer_id, mc_maddress, mc_port, mc_maddress + ":" + mc_port, ChannelType.MC);
         mdb = new Channel(peer_id, mdb_maddress, mdb_port, mdb_maddress + ":" + mdb_port, ChannelType.MDB);
         mdr = new Channel(peer_id, mdr_maddress, mdr_port, mdr_maddress + ":" + mdr_port, ChannelType.MDR);
 
-        mc.start();
-        mdb.start();
-        mdr.start();
+        new Thread(mc).start();
+        new Thread(mdb).start();
+        new Thread(mdr).start();
     }
 
     public static double getProtocolVersion() {
@@ -386,11 +400,12 @@ public class Peer implements ServiceInterface {
 
     private synchronized void sendMessagePUTCHUNKProtocol(byte[] message, FileManager filemanager, FileChunk fileChunk, int replicationDegree, int waitTime) {
         mdb.sendMessage(message);
-        Executors.newScheduledThreadPool(10).schedule(() -> {
-            if(peerContainer.getOccurences().get(PeerContainer.createKey(filemanager.getFileID(), fileChunk.getChunkNo())) < replicationDegree) {
+        Integer actual_rep_degree = peerContainer.getOccurrences().get(PeerContainer.createKey(filemanager.getFileID(), fileChunk.getChunkNo()));
+        new ScheduledThreadPoolExecutor(200).schedule(() -> {
+            if(actual_rep_degree == null || actual_rep_degree < replicationDegree) {
                 if(waitTime * 2 > 16) return;
                 sendMessagePUTCHUNKProtocol(message, filemanager, fileChunk, replicationDegree, waitTime * 2);
-            } else updatePeerStateAboutChunk(filemanager.getFileID(), fileChunk.getChunkNo(), peerContainer.getOccurences().get(PeerContainer.createKey(filemanager.getFileID(), fileChunk.getChunkNo())));
+            } else updatePeerStateAboutChunk(filemanager.getFileID(), fileChunk.getChunkNo(), peerContainer.getOccurrences().get(PeerContainer.createKey(filemanager.getFileID(), fileChunk.getChunkNo())));
         }, waitTime, TimeUnit.SECONDS);
     }
 

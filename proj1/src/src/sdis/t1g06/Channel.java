@@ -6,6 +6,7 @@ import java.net.InetAddress;
 import java.net.MulticastSocket;
 import java.net.UnknownHostException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 enum ChannelType {
     MC,
@@ -55,7 +56,7 @@ public class Channel extends Thread {
         }
 
         while(true) {
-            byte[] buf = new byte[64500];
+            byte[] buf = new byte[FileManager.CHUNK_MAX_SIZE + 500];
             DatagramPacket p = new DatagramPacket(buf, buf.length);
 
             try {
@@ -69,7 +70,7 @@ public class Channel extends Thread {
             String message = new String(p.getData(), 0, p.getLength());
             String[] parts = message.split("\\s+");
             if(!parts[2].equals(String.valueOf(peer_id))) {
-                Executors.newScheduledThreadPool(10).execute(() -> {
+                Executors.newScheduledThreadPool(200).execute(() -> {
                     System.out.println("> Peer " + Peer.getPeerID() + ": Catched message on channel " + channelType.toString() + " from peer " + parts[2]);
                     Peer.treatMessage(p);
                 });

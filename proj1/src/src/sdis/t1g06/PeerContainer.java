@@ -8,14 +8,14 @@ public class PeerContainer implements Serializable {
     private int pID;
     private ArrayList<FileManager> storedFiles;
     private ArrayList<FileChunk> storedChunks;
-    private ConcurrentHashMap<String, Integer> occurences;
+    private ConcurrentHashMap<String, Integer> occurrences;
     private int freeSpace;
 
     public PeerContainer(int pid){
         this.storedFiles = getFilesFromFolder(null);
         this.storedChunks = getChunksFromFolder(null);
         this.freeSpace = 8 * 1000000;
-        this.occurences = new ConcurrentHashMap<>();
+        this.occurrences = new ConcurrentHashMap<>();
         this.pID = pid;
     }
 
@@ -51,7 +51,7 @@ public class PeerContainer implements Serializable {
         pID = peerContainer.getPeerID();
         storedFiles = peerContainer.getStoredFiles();
         storedChunks = peerContainer.getStoredChunks();
-        occurences = peerContainer.getOccurences();
+        occurrences = peerContainer.getOccurrences();
         freeSpace = peerContainer.getFreeSpace();
     }
 
@@ -73,7 +73,7 @@ public class PeerContainer implements Serializable {
     public synchronized ArrayList<FileChunk> getStoredChunks(){
         return storedChunks;
     }
-    public synchronized ConcurrentHashMap<String, Integer> getOccurences(){return occurences;}
+    public synchronized ConcurrentHashMap<String, Integer> getOccurrences(){return occurrences;}
     public synchronized int getFreeSpace(){
         return freeSpace;
     }
@@ -84,7 +84,7 @@ public class PeerContainer implements Serializable {
 
     public synchronized boolean addStoredChunk(FileChunk chunk){
         for(FileChunk storedChunk : this.storedChunks){
-            if(storedChunk == chunk) return false; // cant store equal chunks
+            if(chunk.equals(storedChunk)) return false; // cant store equal chunks
         }
         this.storedChunks.add(chunk);
         return true;
@@ -98,16 +98,16 @@ public class PeerContainer implements Serializable {
         return fileID + "/" + chunkNo;
     }
 
-    public synchronized boolean containsOccurence(String key){
-        return this.occurences.containsKey(key);
+    public synchronized boolean containsOccurrence(String key){
+        return this.occurrences.containsKey(key);
     }
 
     public synchronized void incOccurences(String fileID, int chunkNo){
         String key = createKey(fileID, chunkNo);
-        if(!containsOccurence(key)) {
-            this.occurences.put(key, 1);
+        if(!containsOccurrence(key)) {
+            this.occurrences.put(key, 1);
         } else {
-            this.occurences.replace(key, this.occurences.get(key) + 1);
+            this.occurrences.replace(key, this.occurrences.get(key) + 1);
         }
     }
 

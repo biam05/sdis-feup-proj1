@@ -54,7 +54,16 @@ public class TestApp {
                 String response = stub.restore(file_name);
                 System.out.println("response: " + response);
             }
-            case "DELETE" -> System.out.println("> TestApp: DELETE Operation");
+            case "DELETE" -> {
+                System.out.println("> TestApp: DELETE Operation");
+                if (args.length != 3) {
+                    System.err.println("Wrong number of arguments given for RESTORE operation");
+                    return;
+                }
+                String file_name = args[2];
+                String response = stub.delete(file_name);
+                System.out.println("response: " + response);
+            }
             case "RECLAIM" -> System.out.println("> TestApp: RECLAIM Operation");
             case "STATE" -> System.out.println("> TestApp: STATE Operation");
             default -> System.err.println("TestApp: Invalid operation requested");
