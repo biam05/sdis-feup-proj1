@@ -3,9 +3,9 @@ package sdis.t1g06;
 import java.io.Serializable;
 
 public class FileChunk implements Serializable {
-    private String fileID;
-    private int chunkNo;
-    private int size; // max 64kB
+    private final String fileID;
+    private final int chunkNo;
+    private final int size; // max 64kB
     private byte[] content;
     private int replicationDegree; // number of peers backing up a chunk
     private int desiredReplicationDegree; // number of peers backing up a chunk

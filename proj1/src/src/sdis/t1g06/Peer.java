@@ -11,9 +11,7 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -171,7 +169,6 @@ public class Peer implements ServiceInterface {
 
         double version = Double.parseDouble(parts[0]);
         String control = parts[1].toUpperCase();
-        int sender_id = Integer.parseInt(parts[2]);
         String file_id = parts[3];
 
         switch (control) {
@@ -225,7 +222,6 @@ public class Peer implements ServiceInterface {
                         System.arraycopy(chunk.getContent(), 0, response, header.getBytes().length, chunk.getContent().length);
                         new ScheduledThreadPoolExecutor(200).schedule(() -> {
                             mdr.sendMessage(response);
-                            System.out.println(response_time + " ms :: " + Arrays.toString(response));
                         }, response_time, TimeUnit.MILLISECONDS);
                         break;
                     }
@@ -278,7 +274,7 @@ public class Peer implements ServiceInterface {
             }
             case "DELETE" -> {
                 ArrayList<FileChunk> toBeDeleted = new ArrayList<>();
-                // Delete Files
+                // Delete From FileSystem
                 for(FileChunk chunk : peerContainer.getStoredChunks()) {
                     if(chunk.getFileID().equals(file_id)){
                         peerContainer.incFreeSpace(chunk.getFileID(), chunk.getChunkNo());
@@ -289,8 +285,10 @@ public class Peer implements ServiceInterface {
                     }
                 }
                 // Delete From Memory
-                for(FileChunk chunk : toBeDeleted)
+                for(FileChunk chunk : toBeDeleted) {
                     peerContainer.getStoredChunks().removeIf(c -> c.equals(chunk));
+                    peerContainer.clearChunkOccurence(chunk.getFileID(), chunk.getChunkNo());
+                }
             }
             default -> System.err.println("> Peer " + peer_id + ": Message with invalid control \"" + control + "\" received");
         }
@@ -340,10 +338,11 @@ public class Peer implements ServiceInterface {
     public synchronized String backup(String file_name, int replicationDegree) { // Called by the initiator peer
 
         FileManager filemanager = new FileManager(peer_path + "files/" + file_name, replicationDegree);
-        if(peerContainer.getStoredFiles().contains(filemanager)) {
+        if(peerContainer.getOccurrences().get(filemanager.getFileID()) != null) {
             System.out.println("This file is already backed up, ignoring command");
             return "Unsuccessful BACKUP of file " + file_name + ", backup of this file already exists";
         }
+        if(filemanager.getChunks().size() == 0) return "Unsuccessful BACKUP of file " + file_name + ", this file does not exist on this peer's file system";
         peerContainer.addStoredFile(filemanager);
 
         for(int i = 0; i < filemanager.getChunks().size(); i++) {
@@ -402,10 +401,41 @@ public class Peer implements ServiceInterface {
                 byte[] message = header.getBytes();
 
                 sendMessageDELETEProtocol(message);
+                peerContainer.clearFileOccurences(file);
+                peerContainer.deleteStoredFile(file);
                 break;
             }
         }
         return "Successful DELETION of file " + file_name;
+    }
+
+    @Override
+    public String reclaim(int max_disk_space) throws RemoteException{
+        int space_to_free = peerContainer.getFreeSpace() - max_disk_space;
+        if(space_to_free > 0){ // has to delete files
+            for(FileChunk storedChunk : peerContainer.getStoredChunks()) {
+                String key = PeerContainer.createKey(storedChunk.getFileID(), storedChunk.getChunkNo());
+                storedChunk.setReplicationDegree(peerContainer.getOccurrences().get(key)); // Current Replication Degree
+            }
+            int deletedSpace = 0;
+            peerContainer.getStoredChunks().sort(Collections.reverseOrder()); // > RD first to avoid backups
+            for(FileChunk storedChunk : peerContainer.getStoredChunks()){
+                if(deletedSpace >= space_to_free) break;
+                deletedSpace += storedChunk.getSize();
+                // header construction
+                // <Version> REMOVED <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
+                //      CRLF == \r\n
+                String header = protocol_version + " REMOVED " + peer_id + " " + storedChunk.getFileID() +
+                        " " + storedChunk.getChunkNo() + " \r\n\r\n";
+
+                byte[] message = header.getBytes();
+
+                sendMessageREMOVEProtocol(message);
+            }
+
+        }
+        peerContainer.setFreeSpace(max_disk_space - peerContainer.getFreeSpace());
+        return "Successful RECLAIM";
     }
 
     private synchronized void sendMessagePUTCHUNKProtocol(byte[] message, FileManager filemanager, FileChunk fileChunk, int replicationDegree, int waitTime) {
@@ -424,6 +454,10 @@ public class Peer implements ServiceInterface {
     }
 
     private synchronized void sendMessageDELETEProtocol(byte[] message) {
+        mc.sendMessage(message);
+    }
+
+    private synchronized void sendMessageREMOVEProtocol(byte[] message) {
         mc.sendMessage(message);
     }
 

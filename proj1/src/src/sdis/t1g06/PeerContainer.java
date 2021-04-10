@@ -84,6 +84,16 @@ public class PeerContainer implements Serializable {
         this.storedFiles.add(file);
     }
 
+    public synchronized void deleteStoredFile(FileManager file){
+        try {
+            Files.deleteIfExists(Path.of("peer " + pID + "\\" + "files\\" + file.getFile().getName()));
+            System.out.println("> Peer " + pID + ": Succeeded to delete file " + file.getFile().getName());
+        } catch (IOException e) {
+            System.err.println("> Peer " + pID + ": Failed to delete file " + file.getFile().getName());
+            e.printStackTrace();
+        }
+    }
+
     public synchronized boolean addStoredChunk(FileChunk chunk){
         for(FileChunk storedChunk : this.storedChunks){
             if(chunk.equals(storedChunk)) return false; // cant store equal chunks
@@ -117,6 +127,23 @@ public class PeerContainer implements Serializable {
         } else {
             this.occurrences.replace(key, this.occurrences.get(key) + 1);
         }
+    }
+
+    public synchronized void clearFileOccurences(FileManager file) {
+        System.out.println("Chunks: " + file.getChunks().size());
+        for(int chunkNo = 0; chunkNo < file.getChunks().size(); chunkNo++) {
+            String key = createKey(file.getFileID(), chunkNo);
+            this.occurrences.remove(key);
+            System.out.println("Deleted occurence of file " + file.getFileID() + " chunk No: " + chunkNo);
+        }
+        this.storedFiles.removeIf(f -> f.equals(file));
+        this.saveState();
+    }
+    public synchronized void clearChunkOccurence(String fileID, int chunkNo) {
+        String key = createKey(fileID, chunkNo);
+        this.occurrences.remove(key);
+        System.out.println("Deleted occurence of file " + fileID + " chunk No: " + chunkNo);
+        this.saveState();
     }
 
     public synchronized void setFreeSpace(int freeSpace){
