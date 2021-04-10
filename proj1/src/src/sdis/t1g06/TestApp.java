@@ -22,7 +22,7 @@ public class TestApp {
             Registry registry = LocateRegistry.getRegistry();
             stub = (ServiceInterface) registry.lookup(args[0]);
         } catch (Exception e) {
-            System.err.println("TestApp: App exception: " + e.toString());
+            System.err.println("TestApp: App exception: " + e);
             return;
         }
 

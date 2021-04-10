@@ -13,10 +13,10 @@ import java.util.Arrays;
 public class FileManager implements Serializable {
     public final static int CHUNK_MAX_SIZE = 64000;
 
-    private String fileID;
-    private File file;
-    private int replicationDegree;
-    private ArrayList<FileChunk> chunks;
+    private final String fileID;
+    private final File file;
+    private final int replicationDegree;
+    private final ArrayList<FileChunk> chunks;
 
     public FileManager(String path, int replicationDegree){
         this.file = new File(path);
@@ -32,10 +32,6 @@ public class FileManager implements Serializable {
 
     public File getFile(){
         return file;
-    }
-
-    public int getReplicationDegree(){
-        return replicationDegree;
     }
 
     public ArrayList<FileChunk> getChunks(){

@@ -1,17 +1,16 @@
 package sdis.t1g06;
 
-import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.UnknownHostException;
-import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -20,11 +19,10 @@ import java.util.concurrent.TimeUnit;
 //  Fazendo isso, é preciso também na função backup alterar a forma como verifica se um ficheiro já foi backed up. Utilizar o occurrencies do peerContainer
 //  ConcurrentHashMaps para acompanhar se o processo de algum subprotocolo ainda decorre, utilizando o key fileid e o value um boolean. Caso o chunk recebido
 //  tenha tamanho menor que os 64k, mudar pra false, e ignorar msgs seguintes
-//  Separar funções treatMessage por channels
 //  Remove all unecessary printlns
-//  Create worker thread pools instead doing "new" everywhere
 
 public class Peer implements ServiceInterface {
+    public static final int MAX_THREADS = 200;
 
     private static double protocol_version;
     private static int peer_id;
@@ -41,6 +39,8 @@ public class Peer implements ServiceInterface {
     private static Channel mc;
     private static Channel mdb;
     private static Channel mdr;
+
+    private static final ScheduledThreadPoolExecutor peerExecutors = new ScheduledThreadPoolExecutor(MAX_THREADS);
 
     private static PeerContainer peerContainer;
 
@@ -130,7 +130,7 @@ public class Peer implements ServiceInterface {
 
     private synchronized void startAutoSave() {
         peerContainer.loadState();
-        Executors.newScheduledThreadPool(5).scheduleAtFixedRate(() -> {
+        Executors.newScheduledThreadPool(1).scheduleAtFixedRate(() -> {
             peerContainer.saveState();
         }, 0, 3, TimeUnit.SECONDS);
     }
@@ -183,7 +183,7 @@ public class Peer implements ServiceInterface {
                 backup.performBackup();
                 peerContainer.incOccurences(file_id, chunk_no);
                 int response_time = new Random().nextInt(401);
-                new ScheduledThreadPoolExecutor(200).schedule(() -> {
+                peerExecutors.schedule(() -> {
                     String response = version + " STORED " + peer_id + " " + file_id + " " + chunk_no + "\r\n\r\n"; // <Version> STORED <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
                     mc.sendMessage(response.getBytes());
                 }, response_time, TimeUnit.MILLISECONDS);
@@ -218,7 +218,7 @@ public class Peer implements ServiceInterface {
                         byte[] response = new byte[header.getBytes().length + chunk.getContent().length];
                         System.arraycopy(header.getBytes(), 0, response, 0, header.getBytes().length);
                         System.arraycopy(chunk.getContent(), 0, response, header.getBytes().length, chunk.getContent().length);
-                        new ScheduledThreadPoolExecutor(200).schedule(() -> {
+                        peerExecutors.schedule(() -> {
                             mdr.sendMessage(response);
                         }, response_time, TimeUnit.MILLISECONDS);
                         break;
@@ -255,9 +255,9 @@ public class Peer implements ServiceInterface {
     }
 
     public synchronized static void openChannels() throws UnknownHostException {
-        mc = new Channel(peer_id, mc_maddress, mc_port, mc_maddress + ":" + mc_port, ChannelType.MC);
-        mdb = new Channel(peer_id, mdb_maddress, mdb_port, mdb_maddress + ":" + mdb_port, ChannelType.MDB);
-        mdr = new Channel(peer_id, mdr_maddress, mdr_port, mdr_maddress + ":" + mdr_port, ChannelType.MDR);
+        mc = new Channel(peer_id, mc_maddress, mc_port, ChannelType.MC);
+        mdb = new Channel(peer_id, mdb_maddress, mdb_port, ChannelType.MDB);
+        mdr = new Channel(peer_id, mdr_maddress, mdr_port, ChannelType.MDR);
 
         new Thread(mc).start();
         new Thread(mdb).start();
@@ -389,7 +389,7 @@ public class Peer implements ServiceInterface {
     private synchronized void sendMessagePUTCHUNKProtocol(byte[] message, FileManager filemanager, FileChunk fileChunk, int replicationDegree, int waitTime) {
         mdb.sendMessage(message);
         Integer actual_rep_degree = peerContainer.getOccurrences().get(PeerContainer.createKey(filemanager.getFileID(), fileChunk.getChunkNo()));
-        new ScheduledThreadPoolExecutor(200).schedule(() -> {
+        peerExecutors.schedule(() -> {
             if(actual_rep_degree == null || actual_rep_degree < replicationDegree) {
                 if(waitTime * 2 > 16) return;
                 sendMessagePUTCHUNKProtocol(message, filemanager, fileChunk, replicationDegree, waitTime * 2);

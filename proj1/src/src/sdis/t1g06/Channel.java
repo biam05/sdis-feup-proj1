@@ -5,7 +5,7 @@ import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
 import java.net.UnknownHostException;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 enum ChannelType {
     MC,
@@ -25,17 +25,16 @@ public class Channel extends Thread {
     private final int peer_id;
     private final int mport;
     private final InetAddress maddress;
-    private final String name;
     private MulticastSocket channel;
     private final ChannelType channelType;
+    private final ScheduledThreadPoolExecutor channelExecuters = new ScheduledThreadPoolExecutor(Peer.MAX_THREADS);
 
     private int timeout = 3;
 
-    public Channel(int peer_id, String maddress, int mport, String name, ChannelType channelType) throws UnknownHostException {
+    public Channel(int peer_id, String maddress, int mport, ChannelType channelType) throws UnknownHostException {
         this.peer_id = peer_id;
         this.mport = mport;
         this.maddress = InetAddress.getByName(maddress);
-        this.name = name;
         this.channelType = channelType;
     }
 
@@ -65,11 +64,11 @@ public class Channel extends Thread {
                 System.exit(-1);
             }
 
-            // Check if packet has not been sent by himself
+            // Check if packet has not been sent by himself, ignore if it is
             String message = new String(p.getData(), 0, p.getLength());
             String[] parts = message.split("\\s+");
             if(!parts[2].equals(String.valueOf(peer_id))) {
-                Executors.newScheduledThreadPool(200).execute(() -> {
+                channelExecuters.execute(() -> {
                     System.out.println("> Peer " + Peer.getPeerID() + ": Catched message on channel " + channelType.toString() + " from peer " + parts[2]);
                     Peer.treatMessage(p);
                 });
