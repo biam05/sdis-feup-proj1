@@ -209,7 +209,7 @@ public class Peer implements ServiceInterface {
                 byte[] content = getBody(packet);
                 FileChunk chunk = new FileChunk(file_id, chunk_no, content, content.length);
                 if (!peerContainer.addStoredChunk(chunk)) {
-                    System.err.println("I already have this chunk, ignoring");
+                    System.err.println("> Peer " + peer_id + ": I already have this Chunk. Ignoring it");
                     break;
                 }
                 Backup backup = new Backup(chunk, peer_id);
@@ -241,8 +241,6 @@ public class Peer implements ServiceInterface {
                 }
                 if(isOfMyInterest) {
                     peerContainer.incOccurences(file_id, chunk_no);
-                    System.out.println("Incremented occurence of chunk");
-                    System.out.println(peerContainer.getOccurrences().get(PeerContainer.createKey(file_id, chunk_no)));
                 }
             }
             // <Version> GETCHUNK <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
@@ -336,7 +334,7 @@ public class Peer implements ServiceInterface {
 
         FileManager filemanager = new FileManager(getPeerPath(peer_id) + "files/" + file_name, replicationDegree);
         if(peerContainer.getOccurrences().get(filemanager.getFileID()) != null) {
-            System.out.println("This file is already backed up, ignoring command");
+            System.out.println("> Peer " + peer_id + ": this file is already backed up, ignoring command");
             return "Unsuccessful BACKUP of file " + file_name + ", backup of this file already exists";
         }
         if(filemanager.getChunks().size() == 0) return "Unsuccessful BACKUP of file " + file_name + ", this file does not exist on this peer's file system";

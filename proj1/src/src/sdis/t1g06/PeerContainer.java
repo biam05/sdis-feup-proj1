@@ -205,11 +205,10 @@ public class PeerContainer implements Serializable {
      * @param file File that will have the occurrences cleared
      */
     public synchronized void clearFileOccurences(FileManager file) {
-        System.out.println("Chunks: " + file.getChunks().size());
         for(int chunkNo = 0; chunkNo < file.getChunks().size(); chunkNo++) {
             String key = createKey(file.getFileID(), chunkNo);
             this.occurrences.remove(key);
-            System.out.println("Deleted occurence of file " + file.getFileID() + " chunk No: " + chunkNo);
+            System.out.println("> Peer " + pID + " deleted occurence of file " + file.getFileID() + " chunk No: " + chunkNo);
         }
         this.storedFiles.removeIf(f -> f.equals(file));
         this.saveState();
@@ -223,7 +222,7 @@ public class PeerContainer implements Serializable {
     public synchronized void clearChunkOccurence(String fileID, int chunkNo) {
         String key = createKey(fileID, chunkNo);
         this.occurrences.remove(key);
-        System.out.println("Deleted occurence of file " + fileID + " chunk No: " + chunkNo);
+        System.out.println("> Peer " + pID + " deleted occurence of chunk No: " + chunkNo + " from file " + fileID);
         this.saveState();
     }
 
