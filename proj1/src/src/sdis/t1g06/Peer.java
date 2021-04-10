@@ -23,13 +23,12 @@ import java.util.concurrent.TimeUnit;
 //  Separar funções treatMessage por channels
 //  Remove all unecessary printlns
 //  Create worker thread pools instead doing "new" everywhere
-//  Same as for backup, create separate classes for the DELETE and RESTORE
 
 public class Peer implements ServiceInterface {
 
     private static double protocol_version;
     private static int peer_id;
-    private static String peer_path;
+
     private static String service_access_point;
 
     private static String mc_maddress;
@@ -49,7 +48,6 @@ public class Peer implements ServiceInterface {
                  int mc_port, String mdb_maddress, int mdb_port, String mdr_maddress, int mdr_port) {
         Peer.protocol_version = protocol_version;
         Peer.peer_id = peer_id;
-        Peer.peer_path = "peer " + peer_id + "/";
         Peer.service_access_point = service_access_point;
 
         Peer.mc_maddress = mc_maddress;
@@ -229,72 +227,18 @@ public class Peer implements ServiceInterface {
             }
             case "CHUNK" -> {
                 int chunk_no = Integer.parseInt(parts[4]);
-                for(FileManager file : peerContainer.getStoredFiles()) {
-                    if(file.getFileID().equals(file_id)) {
-                        boolean fileRestorationHasAlreadyStarted = false;
-                        FileManager restored_file = new FileManager(peer_path + "files/restored_" + file.getFile().getName(), 0);
-                        for(FileManager tmp : peerContainer.getStoredFiles()) {
-                            if(tmp.getFile().getName().equals(restored_file.getFile().getName())) {
-                                fileRestorationHasAlreadyStarted = true;
-                                restored_file = tmp;
-                                break;
-                            }
-                        }
-                        if(!fileRestorationHasAlreadyStarted)
-                            peerContainer.addStoredFile(restored_file);
-                        if(!restored_file.getFile().exists()) {
-                            try {
-                                if(!restored_file.getFile().createNewFile()) throw new FileAlreadyExistsException("");
-                            } catch (FileAlreadyExistsException e) {
-                                System.err.println("> Peer " + peer_id + ": Schrödinger's file, both exists and doesn't at the same time");
-                                return;
-                            } catch (IOException e) {
-                                System.err.println("> Peer " + peer_id + ": Failed to create restored file");
-                                return;
-                            }
-                        }
-                        boolean chunkAlreadyReceived = false;
-                        for(FileChunk chunk : restored_file.getChunks()) {
-                            if(chunk.getChunkNo() == chunk_no) {
-                                chunkAlreadyReceived = true;
-                                System.out.println("> Peer " + peer_id + ": Chunk nº" + chunk_no + " already processed, ignoring repeat");
-                                break;
-                            }
-                        }
-                        if(!chunkAlreadyReceived) {
-                            byte[] content = getBody(packet);
-                            FileChunk chunk = new FileChunk(restored_file.getFileID(), chunk_no, content, content.length);
-                            restored_file.getChunks().add(chunk);
-                            if(restored_file.getChunks().size() == file.getChunks().size())
-                                restored_file.createFile(Path.of(peer_path + "files/restored_" + file.getFile().getName()), peer_id);
-                        }
-                        break;
-                    }
-                }
+                Restore restore = new Restore(file_id, chunk_no, peer_id, peerContainer);
+                restore.performRestore(packet);
             }
             case "DELETE" -> {
-                ArrayList<FileChunk> toBeDeleted = new ArrayList<>();
-                // Delete From FileSystem
-                for(FileChunk chunk : peerContainer.getStoredChunks()) {
-                    if(chunk.getFileID().equals(file_id)){
-                        peerContainer.incFreeSpace(chunk.getFileID(), chunk.getChunkNo());
-                        Executors.newScheduledThreadPool(5).schedule(() -> {
-                            peerContainer.deleteStoredChunk(chunk);
-                        }, 0, TimeUnit.SECONDS);
-                        toBeDeleted.add(chunk);
-                    }
-                }
-                // Delete From Memory
-                for(FileChunk chunk : toBeDeleted) {
-                    peerContainer.getStoredChunks().removeIf(c -> c.equals(chunk));
-                    peerContainer.clearChunkOccurence(chunk.getFileID(), chunk.getChunkNo());
-                }
+                Delete delete = new Delete(file_id, peerContainer);
+                delete.performDelete();
             }
             default -> System.err.println("> Peer " + peer_id + ": Message with invalid control \"" + control + "\" received");
         }
     }
 
-    private static byte[] getBody(DatagramPacket packet) {
+    public static byte[] getBody(DatagramPacket packet) {
         byte[] message = packet.getData();
         byte[] content = new byte[FileManager.CHUNK_MAX_SIZE];
         for(int i = 0; i < message.length - 3; i++) {
@@ -304,6 +248,10 @@ public class Peer implements ServiceInterface {
             }
         }
         return content;
+    }
+
+    public static String getPeerPath(int pID) {
+        return "peer " + pID + "/";
     }
 
     public synchronized static void openChannels() throws UnknownHostException {
@@ -337,7 +285,7 @@ public class Peer implements ServiceInterface {
     @Override
     public synchronized String backup(String file_name, int replicationDegree) { // Called by the initiator peer
 
-        FileManager filemanager = new FileManager(peer_path + "files/" + file_name, replicationDegree);
+        FileManager filemanager = new FileManager(getPeerPath(peer_id) + "files/" + file_name, replicationDegree);
         if(peerContainer.getOccurrences().get(filemanager.getFileID()) != null) {
             System.out.println("This file is already backed up, ignoring command");
             return "Unsuccessful BACKUP of file " + file_name + ", backup of this file already exists";
