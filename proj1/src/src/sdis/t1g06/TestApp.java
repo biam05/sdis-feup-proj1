@@ -6,11 +6,32 @@ import java.rmi.registry.Registry;
 import java.util.Locale;
 import java.util.Scanner;
 
+/**
+ * Test App Class
+ */
 public class TestApp {
 
+    /**
+     * Main Function
+     * @param args arguments passed in the command line
+     */
     public static void main(String[] args) throws RemoteException {
 
-        // check usage
+        /**
+         * Check Usage
+         * java TestApp <peer_ap> <sub_protocol> <opnd_1> <opnd_2>
+         *     <peer_ap> Is the peer's access point. This depends on the implementation
+         *     <operation> Is the operation the peer of the backup service must execute. It can be either the triggering
+         *     of the subprotocol to test, or the retrieval of the peer's internal state. In the first case it must be
+         *     one of: BACKUP, RESTORE, DELETE, RECLAIM. To retrieve the internal state, the value of this argument must
+         *     be STATE
+         *     <opnd_1> Is either the path name of the file to backup/restore/delete, for the respective 3 subprotocols,
+         *     or, in the case of RECLAIM the maximum amount of disk space (in KByte) that the service can use to store
+         *     the chunks. In the latter case, the peer should execute the RECLAIM protocol, upon deletion of any chunk.
+         *     The STATE operation takes no operands.
+         *     <opnd_2> This operand is an integer that specifies the desired replication degree and applies only to the
+         *     backup protocol (or its enhancement)
+         */
         if (args.length < 2) {
             System.out.println("Usage: java TestApp <peer_ap> <sub_protocol> <opnds>");
             return;
@@ -26,7 +47,9 @@ public class TestApp {
             return;
         }
 
+        // Different Commands
         switch (args[1].toUpperCase(Locale.ROOT)) {
+            // Backup a File
             case "BACKUP" -> {
                 System.out.println("> TestApp: BACKUP Operation");
                 if (args.length != 4) {
@@ -44,6 +67,7 @@ public class TestApp {
                 String response = stub.backup(file_name, replicationDegree);
                 System.out.println("response: " + response);
             }
+            // Restore a File
             case "RESTORE" -> {
                 System.out.println("> TestApp: RESTORE Operation");
                 if (args.length != 3) {
@@ -54,6 +78,7 @@ public class TestApp {
                 String response = stub.restore(file_name);
                 System.out.println("response: " + response);
             }
+            // Delete a File
             case "DELETE" -> {
                 System.out.println("> TestApp: DELETE Operation");
                 if (args.length != 3) {
@@ -64,11 +89,23 @@ public class TestApp {
                 String response = stub.delete(file_name);
                 System.out.println("response: " + response);
             }
-            case "RECLAIM" -> System.out.println("> TestApp: RECLAIM Operation");
+            // Reclaim Space
+            case "RECLAIM" -> {
+                System.out.println("> TestApp: RECLAIM Operation");
+                if (args.length != 3){
+                    System.err.println("Wrong number of arguments given for RECLAIM operation");
+                    return;
+                }
+                int space = Integer.parseInt(args[2]);
+                String response = stub.reclaim(space); // TODO - TEST RECLAIM
+                System.out.println("response: " + response);
+            }
+            // Get Internal State
             case "STATE" -> System.out.println("> TestApp: STATE Operation");
             default -> System.err.println("TestApp: Invalid operation requested");
         }
 
+        // TODO - DELETE WHEN THE PROJECT IS FINISHED
         Scanner myObj = new Scanner(System.in);  // Create a Scanner object
         String userName = myObj.nextLine();  // Read user input
     }

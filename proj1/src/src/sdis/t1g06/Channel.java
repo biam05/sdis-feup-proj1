@@ -7,11 +7,21 @@ import java.net.MulticastSocket;
 import java.net.UnknownHostException;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
+/**
+ * Types of Multicast Channels
+ * MC - Multicast Control Channel
+ * MDB - Multicast Data Backup Channel
+ * MDR - Mutlicast Data Restore Channel
+ */
 enum ChannelType {
     MC,
     MDB,
     MDR;
 
+    /**
+     * Function used to return the string corresponding the multicast channel
+     * @return String corresponding to the multicast channel
+     */
     public String toString() {
         return switch (this) {
             case MC -> "MC";
@@ -21,6 +31,9 @@ enum ChannelType {
     }
 }
 
+/**
+ * Channel Class
+ */
 public class Channel extends Thread {
     private final int peer_id;
     private final int mport;
@@ -31,6 +44,13 @@ public class Channel extends Thread {
 
     private int timeout = 3;
 
+    /**
+     * Channel Constructor
+     * @param peer_id Peer ID
+     * @param maddress Address of the Channel
+     * @param mport Port of the Channel
+     * @param channelType Type of Channel (MC, MDB, MDR)
+     */
     public Channel(int peer_id, String maddress, int mport, ChannelType channelType) throws UnknownHostException {
         this.peer_id = peer_id;
         this.mport = mport;
@@ -38,6 +58,9 @@ public class Channel extends Thread {
         this.channelType = channelType;
     }
 
+    /**
+     * Function used to run the channel and deal with the information that is passed through it
+     */
     public void run() {
         try {
             channel = new MulticastSocket(mport);
@@ -76,6 +99,10 @@ public class Channel extends Thread {
         }
     }
 
+    /**
+     * Function used to send a message through the channel
+     * @param buf message that is gonna be sent
+     */
     public synchronized void sendMessage(byte[] buf) {
         DatagramPacket message;
         message = new DatagramPacket(buf, buf.length, this.maddress, this.mport);

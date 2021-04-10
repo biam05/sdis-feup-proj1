@@ -5,12 +5,22 @@ import java.net.DatagramPacket;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Path;
 
+/**
+ * Restore Class
+ */
 public class Restore {
     private final String fileId;
     private final int chunkNo;
     private final int pID;
     private final PeerContainer peerContainer;
 
+    /**
+     * Restore Constructor
+     * @param fileId File ID
+     * @param chunkNo Chunk Number
+     * @param pId Peer ID
+     * @param peerContainer Container of the Peer
+     */
     public Restore(String fileId, int chunkNo, int pId, PeerContainer peerContainer){
         this.fileId = fileId;
         this.chunkNo = chunkNo;
@@ -18,6 +28,10 @@ public class Restore {
         this.peerContainer = peerContainer;
     }
 
+    /**
+     * Function used to perform the Restore of a File
+     * @param packet message with information about the file that is gonna be restored
+     */
     public synchronized void performRestore(DatagramPacket packet) {
         for(FileManager file : peerContainer.getStoredFiles()) {
             if(file.getFileID().equals(fileId)) {

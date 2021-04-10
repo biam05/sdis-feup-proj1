@@ -10,6 +10,9 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
 
+/**
+ * FileManager Class
+ */
 public class FileManager implements Serializable {
     public final static int CHUNK_MAX_SIZE = 64000;
 
@@ -18,6 +21,11 @@ public class FileManager implements Serializable {
     private final int replicationDegree;
     private final ArrayList<FileChunk> chunks;
 
+    /**
+     * FileManager Constructor
+     * @param path Path of the File
+     * @param replicationDegree Replication Degree of the File
+     */
     public FileManager(String path, int replicationDegree){
         this.file = new File(path);
         this.replicationDegree = replicationDegree;
@@ -26,18 +34,33 @@ public class FileManager implements Serializable {
         split();
     }
 
+    /**
+     * File ID Getter
+     * @return File ID
+     */
     public String getFileID(){
         return fileID;
     }
 
+    /**
+     * File Getter
+     * @return File
+     */
     public File getFile(){
         return file;
     }
 
+    /**
+     * File Chunks Getter
+     * @return File Chunks
+     */
     public ArrayList<FileChunk> getChunks(){
         return chunks;
     }
 
+    /**
+     * Function used to split the file in multiple chunks
+     */
     private synchronized void split() {
         int chunkNo = 0; // number of the first chunk
         int maxSize = CHUNK_MAX_SIZE; // max size of chunk = 64kB
@@ -66,6 +89,10 @@ public class FileManager implements Serializable {
         }
     }
 
+    /**
+     * Function used to get the File ID
+     * @return File ID (after SHA256 encoding)
+     */
     private synchronized String id(){
         String filename = this.file.getName();                      // file name
         String filedate = String.valueOf(this.file.lastModified()); // date modified
@@ -75,6 +102,11 @@ public class FileManager implements Serializable {
         return sha256(originalString); // sha-256 encryption
     }
 
+    /**
+     * SHA256 Encoding Function
+     * @param originalString Orignal String before encoding
+     * @return String after Encoding
+     */
     private synchronized static String sha256(String originalString){
         try{
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -92,20 +124,13 @@ public class FileManager implements Serializable {
             System.err.println("Error in SHA-256 Encryptation.\n");
             throw new RuntimeException(e);
         }
-
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof FileManager)) {
-            return false;
-        }
-
-        FileManager fm = (FileManager) o;
-
-        return this.fileID.equals(fm.fileID);
-    }
-
+    /**
+     * Function Used to Create a File
+     * @param path Path of the File that is gonna eb Created
+     * @param pID ID of the Peer that is creating the File
+     */
     public synchronized void createFile(Path path, int pID) {
         byte[] content = new byte[0];
         for(int i = 0; i < chunks.size(); i++) {
@@ -120,7 +145,6 @@ public class FileManager implements Serializable {
                 }
             }
         }
-
         try {
             AsynchronousFileChannel fileChannel = AsynchronousFileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
             fileChannel.write(ByteBuffer.wrap(content), 0);
@@ -130,5 +154,16 @@ public class FileManager implements Serializable {
             System.err.println("> Peer " + pID + ": File at " + path + " was not created successfully");
             e.printStackTrace();
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof FileManager)) {
+            return false;
+        }
+
+        FileManager fm = (FileManager) o;
+
+        return this.fileID.equals(fm.fileID);
     }
 }

@@ -6,11 +6,20 @@ import java.nio.channels.AsynchronousFileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
+/**
+ * Backup Class
+ */
 public class Backup {
     private final String fileId;
     private final int chunkNo;
     private final byte[] content;
     private final int pID;
+
+    /**
+     * Backup Constructor
+     * @param chunk Chunk that will be backed up
+     * @param pId Peer ID
+     */
     public Backup(FileChunk chunk, int pId){
         this.fileId = chunk.getFileID();
         this.chunkNo = chunk.getChunkNo();
@@ -18,6 +27,9 @@ public class Backup {
         this.pID = pId;
     }
 
+    /**
+     * Function used to perform the backup of a chunk
+     */
     public synchronized void performBackup() {
         try {
             Path path = Path.of("peer " + pID + "\\" + "chunks\\" + fileId + "_" + chunkNo);

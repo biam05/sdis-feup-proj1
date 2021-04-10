@@ -21,6 +21,9 @@ import java.util.concurrent.TimeUnit;
 //  tenha tamanho menor que os 64k, mudar pra false, e ignorar msgs seguintes
 //  Remove all unecessary printlns
 
+/**
+ * Peer Class - Represents a Peer used in the Distributed Backup Service
+ */
 public class Peer implements ServiceInterface {
     public static final int MAX_THREADS = 200;
 
@@ -44,6 +47,18 @@ public class Peer implements ServiceInterface {
 
     private static PeerContainer peerContainer;
 
+    /**
+     * Peer Constructor
+     * @param protocol_version
+     * @param peer_id
+     * @param service_access_point
+     * @param mc_maddress
+     * @param mc_port
+     * @param mdb_maddress
+     * @param mdb_port
+     * @param mdr_maddress
+     * @param mdr_port
+     */
     private Peer(double protocol_version, int peer_id, String service_access_point, String mc_maddress,
                  int mc_port, String mdb_maddress, int mdb_port, String mdr_maddress, int mdr_port) {
         Peer.protocol_version = protocol_version;
@@ -60,6 +75,10 @@ public class Peer implements ServiceInterface {
         Peer.peerContainer = new PeerContainer(peer_id);
     }
 
+    /**
+     * Main function
+     * @param args - arguments used by the peer
+     */
     public static void main(String[] args) {
         // check usage
         if (args.length < 9) {
@@ -118,8 +137,10 @@ public class Peer implements ServiceInterface {
         System.out.println("> Peer " + pID + ": Ready");
     }
 
+    /**
+     * Function used to create Peer Directories
+     */
     private void createDirectories() {
-        // Create peer directory
         try {
             Files.createDirectories(Paths.get("peer " + peer_id + "\\files"));
             Files.createDirectories(Paths.get("peer " + peer_id + "\\chunks"));
@@ -128,6 +149,10 @@ public class Peer implements ServiceInterface {
         }
     }
 
+    /**
+     * Function used to load the state of the peer from a file state.ser and initialize a thread that auto-saves the
+     * state of the peer every 3 seconds
+     */
     private synchronized void startAutoSave() {
         peerContainer.loadState();
         Executors.newScheduledThreadPool(1).scheduleAtFixedRate(() -> {
@@ -135,6 +160,9 @@ public class Peer implements ServiceInterface {
         }, 0, 3, TimeUnit.SECONDS);
     }
 
+    /**
+     * Function used to start RMI
+     */
     private void startRMI() {
         String codeBasePath = "out/production/proj1/sdis/t1g06/";
         String policyfilePath = "rmipolicy/my.policy/";
@@ -144,14 +172,10 @@ public class Peer implements ServiceInterface {
         if(System.getSecurityManager() == null) {
             System.setSecurityManager(new SecurityManager());
         }
-
         try {
             ServiceInterface stub = (ServiceInterface) UnicastRemoteObject.exportObject(this, 0);
-
-            // Bind the remote object's stub in the registry
             Registry registry = LocateRegistry.getRegistry();
             registry.bind(peer_id + "", stub);
-
             System.out.println("> Peer " + peer_id + ": RMI service registered");
         } catch (Exception e) {
             System.err.println("> Peer " + peer_id + ": Failed to register RMI service");
@@ -159,8 +183,17 @@ public class Peer implements ServiceInterface {
         }
     }
 
-    // <Version> PUTCHUNK <SenderId> <FileId> <ChunkNo> <ReplicationDeg> <CRLF><CRLF><Body>
-    //      CRLF == \r\n
+    /**
+     * Function used to treat the message that in a DatagramPacket
+     * @param packet DatagramPacket with the message sent
+     *               the "control" is the second argument of the message and specifies the type of message sent
+     * "PUTCHUNK" - used in the BACKUP; sent by the initiator-peer to the MDB to backup a chunk
+     * "STORED" - used in the BACKUP; sent by a peer that stored the chunk upon receiving the PUTCHUNK
+     * "GETCHUNK" - used in the RESTORE; sent by the initiator-peer to the MC to get a chunk to restore
+     * "CHUNK" - used in the RESTORE; sent by the peer to the MDR that has a copy of the specified chunk
+     * "DELETE" - used in the DELETE; sent to the MC to delete the chunks belonging to the specified file and the file
+     * "REMOVED" - used in the RECLAIM; sent to the MC when a peer deletes a copy of a chunk it has backed up
+     */
     public synchronized static void treatMessage(DatagramPacket packet) {
         String message = new String(packet.getData(), 0, packet.getLength());
         String[] parts = message.split("\\s+"); // returns an array of strings (String[]) without any " " results
@@ -170,6 +203,7 @@ public class Peer implements ServiceInterface {
         String file_id = parts[3];
 
         switch (control) {
+            // <Version> PUTCHUNK <SenderId> <FileId> <ChunkNo> <ReplicationDeg> <CRLF><CRLF><Body>
             case "PUTCHUNK" -> {
                 int chunk_no = Integer.parseInt(parts[4]);
                 byte[] content = getBody(packet);
@@ -184,10 +218,12 @@ public class Peer implements ServiceInterface {
                 peerContainer.incOccurences(file_id, chunk_no);
                 int response_time = new Random().nextInt(401);
                 peerExecutors.schedule(() -> {
-                    String response = version + " STORED " + peer_id + " " + file_id + " " + chunk_no + "\r\n\r\n"; // <Version> STORED <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
+                    // <Version> STORED <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
+                    String response = version + " STORED " + peer_id + " " + file_id + " " + chunk_no + "\r\n\r\n";
                     mc.sendMessage(response.getBytes());
                 }, response_time, TimeUnit.MILLISECONDS);
             }
+            // <Version> STORED <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
             case "STORED" -> {
                 int chunk_no = Integer.parseInt(parts[4]);
                 boolean isOfMyInterest = false;
@@ -209,12 +245,14 @@ public class Peer implements ServiceInterface {
                     System.out.println(peerContainer.getOccurrences().get(PeerContainer.createKey(file_id, chunk_no)));
                 }
             }
+            // <Version> GETCHUNK <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
             case "GETCHUNK" -> {
                 int chunk_no = Integer.parseInt(parts[4]);
                 for(FileChunk chunk : peerContainer.getStoredChunks()) {
                     if (chunk.getFileID().equals(file_id) && chunk.getChunkNo() == chunk_no) {
                         int response_time = new Random().nextInt(401);
-                        String header = version + " CHUNK " + peer_id + " " + file_id + " " + chunk_no + "\r\n\r\n"; // <Version> CHUNK <SenderId> <FileId> <ChunkNo> <CRLF><CRLF><Body>
+                        // <Version> CHUNK <SenderId> <FileId> <ChunkNo> <CRLF><CRLF><Body>
+                        String header = version + " CHUNK " + peer_id + " " + file_id + " " + chunk_no + "\r\n\r\n";
                         byte[] response = new byte[header.getBytes().length + chunk.getContent().length];
                         System.arraycopy(header.getBytes(), 0, response, 0, header.getBytes().length);
                         System.arraycopy(chunk.getContent(), 0, response, header.getBytes().length, chunk.getContent().length);
@@ -225,19 +263,32 @@ public class Peer implements ServiceInterface {
                     }
                 }
             }
+            // <Version> CHUNK <SenderId> <FileId> <ChunkNo> <CRLF><CRLF><Body>
             case "CHUNK" -> {
                 int chunk_no = Integer.parseInt(parts[4]);
                 Restore restore = new Restore(file_id, chunk_no, peer_id, peerContainer);
                 restore.performRestore(packet);
             }
+            // <Version> DELETE <SenderId> <FileId> <CRLF><CRLF>
             case "DELETE" -> {
                 Delete delete = new Delete(file_id, peerContainer);
                 delete.performDelete();
+            }
+            // <Version> REMOVED <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
+            case "REMOVED" -> {
+                int chunk_no = Integer.parseInt(parts[4]);
+                Reclaim reclaim = new Reclaim(file_id, chunk_no, peer_id, peerContainer);
+                reclaim.performReclaim();
             }
             default -> System.err.println("> Peer " + peer_id + ": Message with invalid control \"" + control + "\" received");
         }
     }
 
+    /**
+     * Auxiliary Function used to get the body from a message
+     * @param packet message that contains a body
+     * @return body/content of the message
+     */
     public static byte[] getBody(DatagramPacket packet) {
         byte[] message = packet.getData();
         byte[] content = new byte[FileManager.CHUNK_MAX_SIZE];
@@ -250,10 +301,18 @@ public class Peer implements ServiceInterface {
         return content;
     }
 
+    /**
+     * Auxiliary Function used to get the path of a peer
+     * @param pID Peer ID
+     * @return path of the Peer
+     */
     public static String getPeerPath(int pID) {
         return "peer " + pID + "/";
     }
 
+    /**
+     * Function used to open the Multicast Channels
+     */
     public synchronized static void openChannels() throws UnknownHostException {
         mc = new Channel(peer_id, mc_maddress, mc_port, ChannelType.MC);
         mdb = new Channel(peer_id, mdb_maddress, mdb_port, ChannelType.MDB);
@@ -264,24 +323,14 @@ public class Peer implements ServiceInterface {
         new Thread(mdr).start();
     }
 
-    public static double getProtocolVersion() {
-        return protocol_version;
-    }
-
+    /**
+     * Peer ID Getter
+     * @return Peer ID
+     */
     public static int getPeerID() {
         return peer_id;
     }
 
-    public static String getServiceAccessPoint() {
-        return service_access_point;
-    }
-
-    public synchronized static PeerContainer getPeerContainer(){ return peerContainer;}
-
-    /**
-     * The backup service splits each file in chunks and then backs up each chunk independently,
-     * rather than creating multiple files that are a copy of the file to backup.
-     */
     @Override
     public synchronized String backup(String file_name, int replicationDegree) { // Called by the initiator peer
 
@@ -320,9 +369,7 @@ public class Peer implements ServiceInterface {
         for(FileManager file : peerContainer.getStoredFiles()) {
             if(file.getFile().getName().equals(file_name)) {
                 for(FileChunk chunk : file.getChunks()) {
-                    // header construction
                     // <Version> GETCHUNK <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
-                    //      CRLF == \r\n
                     String header = protocol_version + " GETCHUNK " + peer_id + " " + file.getFileID() + " " +
                             chunk.getChunkNo() + " \r\n\r\n";
 
@@ -340,9 +387,7 @@ public class Peer implements ServiceInterface {
     public String delete(String file_name) throws RemoteException{
         for(FileManager file : peerContainer.getStoredFiles()) {
             if(file.getFile().getName().equals(file_name)) {
-                // header construction
                 // <Version> DELETE <SenderId> <FileId> <CRLF><CRLF>
-                //      CRLF == \r\n
                 String header = protocol_version + " DELETE " + peer_id + " " + file.getFileID() +
                         " \r\n\r\n";
 
@@ -386,6 +431,14 @@ public class Peer implements ServiceInterface {
         return "Successful RECLAIM";
     }
 
+    /**
+     * Function used to send the PUTCHUNK message
+     * @param message Body of the message
+     * @param filemanager File Manager that contains information about the file that is gonna eb backed up
+     * @param fileChunk Chunk send in the message
+     * @param replicationDegree Replication Degree of the Chunk
+     * @param waitTime Wait time (used there's an error sending the message)
+     */
     private synchronized void sendMessagePUTCHUNKProtocol(byte[] message, FileManager filemanager, FileChunk fileChunk, int replicationDegree, int waitTime) {
         mdb.sendMessage(message);
         Integer actual_rep_degree = peerContainer.getOccurrences().get(PeerContainer.createKey(filemanager.getFileID(), fileChunk.getChunkNo()));
@@ -397,18 +450,37 @@ public class Peer implements ServiceInterface {
         }, waitTime, TimeUnit.SECONDS);
     }
 
+    /**
+     * Function used to send the GETCHUNK message
+     * @param message message sent
+     */
     private synchronized void sendMessageGETCHUNKProtocol(byte[] message) {
         mc.sendMessage(message);
     }
 
+    /**
+     * Function used to send the DELETE message
+     * @param message message sent
+     */
     private synchronized void sendMessageDELETEProtocol(byte[] message) {
         mc.sendMessage(message);
     }
 
+    /**
+     * Function used to send the REMOVE message
+     * @param message message sent
+     */
     private synchronized void sendMessageREMOVEProtocol(byte[] message) {
         mc.sendMessage(message);
     }
 
+    /**
+     *                        TODO - CONFIRMAR ARGUMENTOS
+     * Function used to update the state of a chunk from a peer
+     * @param fileID file ID from the file which the chunk belongs to
+     * @param chunkNo chunk number of the chunk
+     * @param actualRepDegree current replication degree
+     */
     private synchronized void updatePeerStateAboutChunk(String fileID, int chunkNo, int actualRepDegree) {
         peerContainer.saveState();
         System.out.println("Save state here, repDeg: " + actualRepDegree);
