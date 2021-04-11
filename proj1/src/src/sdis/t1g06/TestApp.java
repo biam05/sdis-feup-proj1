@@ -4,7 +4,6 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.util.Locale;
-import java.util.Scanner;
 
 /**
  * Test App Class
@@ -65,7 +64,7 @@ public class TestApp {
                     return;
                 }
                 String response = stub.backup(file_name, replicationDegree);
-                System.out.println("response: " + response);
+                System.out.println("Response: " + response);
             }
             // Restore a File
             case "RESTORE" -> {
@@ -76,7 +75,7 @@ public class TestApp {
                 }
                 String file_name = args[2];
                 String response = stub.restore(file_name);
-                System.out.println("response: " + response);
+                System.out.println("Response: " + response);
             }
             // Delete a File
             case "DELETE" -> {
@@ -87,7 +86,7 @@ public class TestApp {
                 }
                 String file_name = args[2];
                 String response = stub.delete(file_name);
-                System.out.println("response: " + response);
+                System.out.println("Response: " + response);
             }
             // Reclaim Space
             case "RECLAIM" -> {
@@ -98,15 +97,11 @@ public class TestApp {
                 }
                 int space = Integer.parseInt(args[2]);
                 String response = stub.reclaim(space); // TODO - TEST RECLAIM
-                System.out.println("response: " + response);
+                System.out.println("Response: " + response);
             }
             // Get Internal State
             case "STATE" -> System.out.println("> TestApp: STATE Operation");
             default -> System.err.println("TestApp: Invalid operation requested");
         }
-
-        // TODO - DELETE WHEN THE PROJECT IS FINISHED
-        Scanner myObj = new Scanner(System.in);  // Create a Scanner object
-        String userName = myObj.nextLine();  // Read user input
     }
 }

@@ -1,8 +1,12 @@
 package sdis.t1g06;
 
 import java.io.*;
+import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousFileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -21,8 +25,8 @@ public class PeerContainer implements Serializable {
      * @param pid Peer ID
      */
     public PeerContainer(int pid){
-        this.storedFiles = getFilesFromFolder(null);
-        this.storedChunks = getChunksFromFolder(null);
+        this.storedFiles = new ArrayList<>();
+        this.storedChunks = new ArrayList<>();
         this.freeSpace = 8 * 1000000;
         this.occurrences = new ConcurrentHashMap<>();
         this.pID = pid;
@@ -38,9 +42,9 @@ public class PeerContainer implements Serializable {
             out.writeObject(this);
             out.close();
             stateFileOut.close();
-            //System.out.println("Serialized state saved in /peer " + pID + "/state.ser");
+            //System.out.println("> Peer " + pID + ": Serialized state saved in /peer " + pID + "/state.ser");
         } catch (IOException i) {
-            System.err.println("Failed to save serialized state of peer " + pID);
+            System.err.println("> Peer " + pID + ": Failed to save serialized state");
             i.printStackTrace();
         }
     }
@@ -49,16 +53,17 @@ public class PeerContainer implements Serializable {
      * Function used to load the state of the Peer Container
      */
     public synchronized void loadState() {
-        PeerContainer peerContainer = null;
+        PeerContainer peerContainer;
         try {
             FileInputStream stateFileIn = new FileInputStream("peer " + pID + "/state.ser");
             ObjectInputStream in = new ObjectInputStream(stateFileIn);
             peerContainer = (PeerContainer) in.readObject();
             in.close();
             stateFileIn.close();
-            System.out.println("Serialized state of peer " + pID + " loaded successfully");
+            System.out.println("> Peer " + pID + ": Serialized state of peer loaded successfully");
         } catch (Exception i) {
-            System.out.println("State file of peer " + pID + " not found, a new one will be created");
+            System.out.println("> Peer " + pID + ": State file of peer not found, a new one will be created");
+            updateState();
             this.saveState();
             return;
         }
@@ -71,21 +76,50 @@ public class PeerContainer implements Serializable {
     }
 
     /**
+     * Function used to read the physical state of the Peer's Filesystem and update the Peer's container with it
+     */
+    public synchronized void updateState() {
+        // Register all files
+        try {
+            Files.walk(Paths.get("peer " + pID + "/files")).forEach(filePath -> {
+                if (!filePath.toFile().isDirectory()) {
+                    FileManager fileManager = new FileManager(Peer.getPeerPath(pID) + "files/" + filePath.getFileName().toString(), 0);
+                    if(!storedFiles.contains(fileManager)) storedFiles.add(fileManager);
+                }
+            });
+        } catch (IOException e) {
+            System.err.println("> Peer " + pID + ": Failed to iterate files of peer");
+        }
+
+        // Register all chunks
+        try {
+            Files.walk(Paths.get("peer " + pID + "/chunks")).forEach(filePath -> {
+                if (!filePath.toFile().isDirectory()) {
+                    String[] parts = filePath.getFileName().toString().split("_");
+                    AsynchronousFileChannel fileChannel = null;
+                    try {
+                        fileChannel = AsynchronousFileChannel.open(filePath, StandardOpenOption.READ);
+                    } catch (IOException e) {
+                        System.err.println("> Peer " + pID + ": Failed to open a chunk");
+                    }
+                    byte[] content = new byte[FileManager.CHUNK_MAX_SIZE];
+                    assert fileChannel != null;
+                    fileChannel.read(ByteBuffer.wrap(content), 0);
+                    FileChunk chunk = new FileChunk(parts[0], Integer.parseInt(parts[1]), content, content.length);
+                    if(!storedChunks.contains(chunk)) storedChunks.add(chunk);
+                }
+            });
+        } catch (IOException e) {
+            System.err.println("> Peer " + pID + ": Failed to iterate chunks of peer");
+        }
+    }
+
+    /**
      * Peer ID Getter
      * @return Peer ID
      */
     public int getPeerID() {
         return pID;
-    }
-
-    // TODO - What is this?
-    public static ArrayList<FileManager> getFilesFromFolder(State state){
-        return new ArrayList<>();
-    }
-
-    // TODO - What is this?
-    public static ArrayList<FileChunk> getChunksFromFolder(State state){
-        return new ArrayList<>();
     }
 
     /**
@@ -133,7 +167,7 @@ public class PeerContainer implements Serializable {
     public synchronized void deleteStoredFile(FileManager file){
         try {
             Files.deleteIfExists(Path.of("peer " + pID + "\\" + "files\\" + file.getFile().getName()));
-            System.out.println("> Peer " + pID + ": Succeeded to delete file " + file.getFile().getName());
+            System.out.println("> Peer " + pID + ": DELETE of file " + file.getFile().getName() + " finished");
         } catch (IOException e) {
             System.err.println("> Peer " + pID + ": Failed to delete file " + file.getFile().getName());
             e.printStackTrace();

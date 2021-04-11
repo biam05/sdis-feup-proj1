@@ -69,8 +69,10 @@ public class Restore {
                     byte[] content = Peer.getBody(packet);
                     FileChunk chunk = new FileChunk(restored_file.getFileID(), chunkNo, content, content.length);
                     restored_file.getChunks().add(chunk);
-                    if(restored_file.getChunks().size() == file.getChunks().size())
+                    if(restored_file.getChunks().size() == file.getChunks().size()) {
                         restored_file.createFile(Path.of(Peer.getPeerPath(pID) + "files/restored_" + file.getFile().getName()), pID);
+                        System.out.println("> Peer " + pID + ": RESTORE of file " + restored_file.getFile().getName() + " finished");
+                    }
                 }
                 break;
             }

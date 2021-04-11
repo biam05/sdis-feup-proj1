@@ -11,15 +11,9 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Random;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
-// TODO: Fazer função que ao iniciar um peer verifica se o ficheiro state existe, senão, verifica todos os ficheiros da pasta files e adiciona ao storedFiles
-//  Fazendo isso, é preciso também na função backup alterar a forma como verifica se um ficheiro já foi backed up. Utilizar o occurrencies do peerContainer
-//  ConcurrentHashMaps para acompanhar se o processo de algum subprotocolo ainda decorre, utilizando o key fileid e o value um boolean. Caso o chunk recebido
-//  tenha tamanho menor que os 64k, mudar pra false, e ignorar msgs seguintes
-//  Remove all unecessary printlns
+// TODO: Remove all unecessary printlns
 
 /**
  * Peer Class - Represents a Peer used in the Distributed Backup Service
@@ -49,15 +43,15 @@ public class Peer implements ServiceInterface {
 
     /**
      * Peer Constructor
-     * @param protocol_version
-     * @param peer_id
-     * @param service_access_point
-     * @param mc_maddress
-     * @param mc_port
-     * @param mdb_maddress
-     * @param mdb_port
-     * @param mdr_maddress
-     * @param mdr_port
+     * @param protocol_version version of the protocols this peer is using
+     * @param peer_id unique number identifier that represents the peer
+     * @param service_access_point name of the interface that supplies the client with the peer's functions
+     * @param mc_maddress address of the Control Multicast Channel
+     * @param mc_port port of the Control Multicast Channel
+     * @param mdb_maddress address of the Backup Multicast Channel
+     * @param mdb_port port of the Control Backup Channel
+     * @param mdr_maddress address of the Restore Multicast Channel
+     * @param mdr_port port of the Control Restore Channel
      */
     private Peer(double protocol_version, int peer_id, String service_access_point, String mc_maddress,
                  int mc_port, String mdb_maddress, int mdb_port, String mdr_maddress, int mdr_port) {
@@ -150,18 +144,19 @@ public class Peer implements ServiceInterface {
     }
 
     /**
-     * Function used to load the state of the peer from a file state.ser and initialize a thread that auto-saves the
-     * state of the peer every 3 seconds
+     * Function used to load the state of the peer from a file state.ser, update it with any changes on the physical file system,
+     * and initialize a thread that auto-saves the state of the peer every 3 seconds
      */
     private synchronized void startAutoSave() {
         peerContainer.loadState();
+        peerContainer.updateState();
         Executors.newScheduledThreadPool(1).scheduleAtFixedRate(() -> {
             peerContainer.saveState();
         }, 0, 3, TimeUnit.SECONDS);
     }
 
     /**
-     * Function used to start RMI
+     * Function used to setup the RMI Registry
      */
     private void startRMI() {
         String codeBasePath = "out/production/proj1/sdis/t1g06/";
@@ -331,13 +326,14 @@ public class Peer implements ServiceInterface {
 
     @Override
     public synchronized String backup(String file_name, int replicationDegree) { // Called by the initiator peer
-
-        FileManager filemanager = new FileManager(getPeerPath(peer_id) + "files/" + file_name, replicationDegree);
-        if(peerContainer.getOccurrences().get(filemanager.getFileID()) != null) {
-            System.out.println("> Peer " + peer_id + ": this file is already backed up, ignoring command");
+        FileManager filemanager = null;
+        for(FileManager file : peerContainer.getStoredFiles())
+            if(file.getFile().getName().equals(file_name)) filemanager = file;
+        if(filemanager == null) return "Unsuccessful BACKUP of file " + file_name + ", this file does not exist on this peer's file system";
+        if(peerContainer.getOccurrences().get(filemanager.getFileID()) != null && peerContainer.getOccurrences().get(filemanager.getFileID()) > 0) {
+            System.out.println("This file is already backed up, ignoring command");
             return "Unsuccessful BACKUP of file " + file_name + ", backup of this file already exists";
         }
-        if(filemanager.getChunks().size() == 0) return "Unsuccessful BACKUP of file " + file_name + ", this file does not exist on this peer's file system";
         peerContainer.addStoredFile(filemanager);
 
         for(int i = 0; i < filemanager.getChunks().size(); i++) {
@@ -359,7 +355,7 @@ public class Peer implements ServiceInterface {
             sendMessagePUTCHUNKProtocol(message, filemanager, fileChunk, replicationDegree, 1);
         }
 
-        return "Successful BACKUP of file " + file_name;
+        return "Probably successful BACKUP of file " + file_name;
     }
 
     @Override
@@ -378,7 +374,7 @@ public class Peer implements ServiceInterface {
                 break;
             }
         }
-        return "Successful RESTORE of file " + file_name;
+        return "Probably successful RESTORE of file " + file_name;
     }
 
     @Override
@@ -397,7 +393,7 @@ public class Peer implements ServiceInterface {
                 break;
             }
         }
-        return "Successful DELETION of file " + file_name;
+        return "Probably successful DELETION of file " + file_name;
     }
 
     @Override
@@ -426,16 +422,16 @@ public class Peer implements ServiceInterface {
 
         }
         peerContainer.setFreeSpace(max_disk_space - peerContainer.getFreeSpace());
-        return "Successful RECLAIM";
+        return "Probably successful RECLAIM";
     }
 
     /**
      * Function used to send the PUTCHUNK message
      * @param message Body of the message
-     * @param filemanager File Manager that contains information about the file that is gonna eb backed up
+     * @param filemanager File Manager that contains information about the file that is gonna be backed up
      * @param fileChunk Chunk send in the message
      * @param replicationDegree Replication Degree of the Chunk
-     * @param waitTime Wait time (used there's an error sending the message)
+     * @param waitTime Wait time (used if there's an error sending the message)
      */
     private synchronized void sendMessagePUTCHUNKProtocol(byte[] message, FileManager filemanager, FileChunk fileChunk, int replicationDegree, int waitTime) {
         mdb.sendMessage(message);
@@ -444,7 +440,10 @@ public class Peer implements ServiceInterface {
             if(actual_rep_degree == null || actual_rep_degree < replicationDegree) {
                 if(waitTime * 2 > 16) return;
                 sendMessagePUTCHUNKProtocol(message, filemanager, fileChunk, replicationDegree, waitTime * 2);
-            } else updatePeerStateAboutChunk(filemanager.getFileID(), fileChunk.getChunkNo(), peerContainer.getOccurrences().get(PeerContainer.createKey(filemanager.getFileID(), fileChunk.getChunkNo())));
+            } else {
+                peerContainer.saveState();
+                if(fileChunk.getSize() < FileManager.CHUNK_MAX_SIZE) System.out.println("> Peer " + peer_id + ": BACKUP of file " + filemanager.getFile().getName() + " finished");
+            }
         }, waitTime, TimeUnit.SECONDS);
     }
 
@@ -470,17 +469,5 @@ public class Peer implements ServiceInterface {
      */
     private synchronized void sendMessageREMOVEProtocol(byte[] message) {
         mc.sendMessage(message);
-    }
-
-    /**
-     *                        TODO - CONFIRMAR ARGUMENTOS
-     * Function used to update the state of a chunk from a peer
-     * @param fileID file ID from the file which the chunk belongs to
-     * @param chunkNo chunk number of the chunk
-     * @param actualRepDegree current replication degree
-     */
-    private synchronized void updatePeerStateAboutChunk(String fileID, int chunkNo, int actualRepDegree) {
-        peerContainer.saveState();
-        System.out.println("Save state here, repDeg: " + actualRepDegree);
     }
 }

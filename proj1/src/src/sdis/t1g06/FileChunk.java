@@ -9,7 +9,7 @@ public class FileChunk implements Serializable {
     private final String fileID;
     private final int chunkNo;
     private final int size;
-    private byte[] content;
+    private final byte[] content;
     private int replicationDegree;
     private int desiredReplicationDegree;
 
