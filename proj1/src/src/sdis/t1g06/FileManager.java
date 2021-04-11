@@ -97,7 +97,7 @@ public class FileManager implements Serializable {
             }
             // If the file size is a multiple of the chunk size, the last chunk has size 0
             if(this.file.length() % maxSize == 0){
-                FileChunk fileChunk = new FileChunk(this.fileID, chunkNo + 1, null, 0);
+                FileChunk fileChunk = new FileChunk(this.fileID, chunkNo, null, 0);
                 this.chunks.add(fileChunk);
             }
         } catch (FileNotFoundException fe) {

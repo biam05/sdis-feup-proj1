@@ -21,7 +21,8 @@ start java -Djava.rmi.server.codebase=src/out/production/proj1/sdis/t1g06/ -Djav
 sleep 0.5
 
 echo "--------- Starting testApp ---------"
-java  -classpath src/out/production/proj1 sdis.t1g06.TestApp 1 BACKUP default.txt 4
+#java  -classpath src/out/production/proj1 sdis.t1g06.TestApp 1 BACKUP default.txt 4
+java  -classpath src/out/production/proj1 sdis.t1g06.TestApp 1 BACKUP circle.jpg 4
 #java  -classpath src/out/production/proj1 sdis.t1g06.TestApp 1 RESTORE circle.jpg
 #java  -classpath src/out/production/proj1 sdis.t1g06.TestApp 1 DELETE circle.jpg
 #java  -classpath src/out/production/proj1 sdis.t1g06.TestApp 2 RECLAIM 0

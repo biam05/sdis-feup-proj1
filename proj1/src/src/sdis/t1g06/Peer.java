@@ -374,16 +374,21 @@ public class Peer implements ServiceInterface {
             String header = protocol_version + " PUTCHUNK " + peer_id + " " + filemanager.getFileID()
                     + " " + fileChunk.getChunkNo() + " " + replicationDegree + " \r\n\r\n";
 
-            byte[] message = new byte[header.getBytes().length + fileChunk.getContent().length];
-            System.arraycopy(header.getBytes(), 0, message, 0, header.getBytes().length);
-            System.arraycopy(fileChunk.getContent(), 0, message, header.getBytes().length, fileChunk.getContent().length);
+            byte[] message;
+            if(fileChunk.getContent() == null) {
+                message = header.getBytes();
+            } else {
+                message = new byte[header.getBytes().length + fileChunk.getContent().length];
+                System.arraycopy(header.getBytes(), 0, message, 0, header.getBytes().length);
+                System.arraycopy(fileChunk.getContent(), 0, message, header.getBytes().length, fileChunk.getContent().length);
+            }
 
             sendMessagePUTCHUNKProtocol(message, fileChunk, replicationDegree, 1);
             System.out.println("> Peer " + peer_id + ": Started BACKUP protocol of chunk nº" + fileChunk.getChunkNo() + " of file with file ID: " + fileChunk.getFileID());
         }
 
         filemanager.setAlreadyBackedUp(true);
-        return "Probably successful BACKUP of file " + file_name;
+        return "BACKUP protocol of file " + file_name + " successfully initiated";
     }
 
     @Override
@@ -406,7 +411,7 @@ public class Peer implements ServiceInterface {
                 break;
             }
         }
-        return "Probably successful RESTORE of file " + file_name;
+        return "RESTORE protocol of file " + file_name + " successfully initiated";
     }
 
     @Override
@@ -426,7 +431,7 @@ public class Peer implements ServiceInterface {
                 break;
             }
         }
-        return "Probably successful DELETION of file " + file_name;
+        return "DELETE protocol of file " + file_name + " successfully initiated";
     }
 
     @Override
@@ -465,7 +470,7 @@ public class Peer implements ServiceInterface {
             peerContainer.setFreeSpace(peerContainer.getFreeSpace() - (peerContainer.getMaxSpace() - max_disk_space));
             peerContainer.setMaxSpace(max_disk_space);
         }
-        return "Probably successful RECLAIM";
+        return "RECLAIM protocol successfully initiated";
     }
 
     @Override
