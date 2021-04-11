@@ -503,43 +503,63 @@ public class Peer implements ServiceInterface {
     public String state() throws RemoteException{
         int nFile = 1;
         int nChunk = 1;
-        String state;
-        state = "::::::::::: PEER " + peer_id + " :::::::::::\n";
-        state += "::: BACKED UP FILES :::\n";
+        StringBuilder state = new StringBuilder();
+        state.append(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n");
+        state.append(":::                                   PEER ").append(peer_id).append("                                  :::\n");
+        state.append(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n");
+        state.append(":::                              BACKED UP FILES                              :::\n");
         // each file whose backup has initiated
         for(FileManager fileManager : peerContainer.getStoredFiles()){
             if(fileManager.isAlreadyBackedUp()) {
-                state += "::::::::::: FILE " + nFile + " :::::::::::\n";
-                state += "::: PATH: " + fileManager.getFile().getPath() + " :::\n";
-                state += "::: FILE_ID: " + fileManager.getFileID() + " :::\n";
-                state += "::: DESIRED REPLICATION DEGREE: " + fileManager.getChunks().get(0).getDesiredReplicationDegree() + " :::\n";
-                state += ":::     CHUNKS OF FILE 1     :::\n";
+                state.append(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n");
+                state.append("::: FILE ").append(nFile).append("                                                                    :::\n");
+                state.append(":::                                                                           :::\n");
+                state.append("::: PATH: ").append(fileManager.getFile().getPath()).append("                                             :::\n");
+                state.append("::: FILE_ID: ").append(fileManager.getFileID()).append(" :::\n");
+                state.append("::: DESIRED REPLICATION DEGREE: ").append(fileManager.getChunks().get(0).getDesiredReplicationDegree()).append("                                             :::\n");
+                state.append(":::                                                                           :::\n");
+                state.append("::: CHUNKS OF FILE ").append(nFile).append("                                                          :::\n");
                 for(FileChunk chunk : fileManager.getChunks()){
-                    state += "::: CHUNK " + nChunk + "                   :::\n";
-                    state += ":::       ID: " + chunk.getChunkNo() + " :::\n";
-                    state += ":::       CURRENT REPLICATION DEGREE: " + chunk.getReplicationDegree() + " :::\n";
+                    state.append(":::                                                                           :::\n");
+                    state.append("::: CHUNK ").append(nChunk).append("                                                                   :::\n");
+                    state.append(":::       ID: ").append(chunk.getChunkNo()).append("                                                               :::\n");
+                    state.append(":::       CURRENT REPLICATION DEGREE: ").append(chunk.getReplicationDegree()).append("                                       :::\n");
                     nChunk++;
                 }
                 nFile++;
                 nChunk = 1;
             }
         }
+        if(nFile == 1){
+            state.append(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n");
+            state.append("::: NO BACKED UP FILES                                                        :::\n");
+        }
         // each chunk it stores
-        state += "::: STORED CHUNKS :::\n";
+        state.append(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n");
+        state.append(":::                               STORED CHUNKS                               :::\n");
         for(FileChunk storedChunk : peerContainer.getStoredChunks()){
-            state += "::::::::::: CHUNK " + nChunk + " :::::::::::\n";
-            state += "::: ID: " + storedChunk.getChunkNo() + " :::\n";
-            state += "::: SIZE: " + storedChunk.getSize() + " :::\n";
-            state += "::: DESIRED REPLICATION DEGREE: " + storedChunk.getDesiredReplicationDegree() + " :::\n";
-            state += "::: CURRENT REPLICATION DEGREE: " + storedChunk.getReplicationDegree() + " :::\n";
+            state.append(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n");
+            state.append("::: CHUNK ").append(nChunk).append("                                                                   :::\n");
+            state.append(":::                                                                           :::\n");
+            state.append(":::       ID: ").append(storedChunk.getChunkNo()).append("                                                               :::\n");
+            state.append(":::       SIZE: ").append(storedChunk.getSize()).append("                                                         :::\n");
+            state.append(":::       DESIRED REPLICATION DEGREE: ").append(storedChunk.getDesiredReplicationDegree()).append("                                       :::\n");
+            state.append(":::       CURRENT REPLICATION DEGREE: ").append(storedChunk.getReplicationDegree()).append("                                       :::\n");
             nChunk++;
         }
+        if(nChunk == 1){
+            state.append(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n");
+            state.append("::: NO STORED CHUNKS                                                          :::\n");
+        }
         // peer storage capacity
-        state += "::: PEER STORAGE CAPACITY :::\n";
-        state += "::: TOTAL DISK SPACE: " + peerContainer.getMaxSpace()/1000 + " KB :::\n";
-        state += "::: FREE SPACE: " + peerContainer.getFreeSpace()/1000 + " KB :::\n";
+        state.append(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n");
+        state.append(":::                           PEER STORAGE CAPACITY                           :::\n");
+        state.append(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n");
+        state.append("::: TOTAL DISK SPACE: ").append(peerContainer.getMaxSpace() / 1000).append(" KB                                                 :::\n");
+        state.append("::: FREE SPACE: ").append(peerContainer.getFreeSpace() / 1000).append(" KB                                                       :::\n");
+        state.append(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::");
 
-        return state;
+        return state.toString();
     }
 
     /**
