@@ -71,6 +71,7 @@ public class Restore {
                     restored_file.getChunks().add(chunk);
                     if(restored_file.getChunks().size() == file.getChunks().size()) {
                         restored_file.createFile(Path.of(Peer.getPeerPath(pID) + "files/restored_" + file.getFile().getName()), pID);
+                        peerContainer.decFreeSpace(file.getFile().length());
                         System.out.println("> Peer " + pID + ": RESTORE of file " + restored_file.getFile().getName() + " finished");
                     }
                 }

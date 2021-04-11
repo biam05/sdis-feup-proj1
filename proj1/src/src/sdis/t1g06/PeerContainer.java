@@ -9,16 +9,23 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 /**
  * PeerContainer Class
  */
 public class PeerContainer implements Serializable {
+    public final static long PEER_DEFAULT_MAX_STORAGE = 8000000;
+
     private int pID;
     private ArrayList<FileManager> storedFiles;
     private ArrayList<FileChunk> storedChunks;
     private ConcurrentHashMap<String, Integer> occurrences;
-    private int freeSpace;
+
+    private long maxSpace;
+    private long freeSpace;
+
+    private static final ScheduledThreadPoolExecutor peerContainerExecutors = new ScheduledThreadPoolExecutor(Peer.MAX_THREADS);
 
     /**
      * PeerContainer Constructor
@@ -27,7 +34,8 @@ public class PeerContainer implements Serializable {
     public PeerContainer(int pid){
         this.storedFiles = new ArrayList<>();
         this.storedChunks = new ArrayList<>();
-        this.freeSpace = 8 * 1000000;
+        this.maxSpace = PEER_DEFAULT_MAX_STORAGE;
+        this.freeSpace = PEER_DEFAULT_MAX_STORAGE;
         this.occurrences = new ConcurrentHashMap<>();
         this.pID = pid;
     }
@@ -36,17 +44,19 @@ public class PeerContainer implements Serializable {
      * Function used to save the state of the Peer Container
      */
     public synchronized void saveState() {
-        try {
-            FileOutputStream stateFileOut = new FileOutputStream("peer " + pID + "/state.ser");
-            ObjectOutputStream out = new ObjectOutputStream(stateFileOut);
-            out.writeObject(this);
-            out.close();
-            stateFileOut.close();
-            //System.out.println("> Peer " + pID + ": Serialized state saved in /peer " + pID + "/state.ser");
-        } catch (IOException i) {
-            System.err.println("> Peer " + pID + ": Failed to save serialized state");
-            i.printStackTrace();
-        }
+        peerContainerExecutors.execute(() -> {
+            try {
+                FileOutputStream stateFileOut = new FileOutputStream("peer " + pID + "/state.ser");
+                ObjectOutputStream out = new ObjectOutputStream(stateFileOut);
+                out.writeObject(this);
+                out.close();
+                stateFileOut.close();
+                //System.out.println("> Peer " + pID + ": Serialized state saved in /peer " + pID + "/state.ser");
+            } catch (IOException i) {
+                System.err.println("> Peer " + pID + ": Failed to save serialized state");
+                i.printStackTrace();
+            }
+        });
     }
 
     /**
@@ -72,6 +82,7 @@ public class PeerContainer implements Serializable {
         storedFiles = peerContainer.getStoredFiles();
         storedChunks = peerContainer.getStoredChunks();
         occurrences = peerContainer.getOccurrences();
+        maxSpace = peerContainer.getMaxSpace();
         freeSpace = peerContainer.getFreeSpace();
     }
 
@@ -84,7 +95,10 @@ public class PeerContainer implements Serializable {
             Files.walk(Paths.get("peer " + pID + "/files")).forEach(filePath -> {
                 if (!filePath.toFile().isDirectory()) {
                     FileManager fileManager = new FileManager(Peer.getPeerPath(pID) + "files/" + filePath.getFileName().toString(), 0);
-                    if(!storedFiles.contains(fileManager)) storedFiles.add(fileManager);
+                    if(!storedFiles.contains(fileManager)) {
+                        storedFiles.add(fileManager);
+                        freeSpace -= filePath.toFile().length();
+                    }
                 }
             });
         } catch (IOException e) {
@@ -106,7 +120,10 @@ public class PeerContainer implements Serializable {
                     assert fileChannel != null;
                     fileChannel.read(ByteBuffer.wrap(content), 0);
                     FileChunk chunk = new FileChunk(parts[0], Integer.parseInt(parts[1]), content, content.length);
-                    if(!storedChunks.contains(chunk)) storedChunks.add(chunk);
+                    if(!storedChunks.contains(chunk)) {
+                        storedChunks.add(chunk);
+                        freeSpace -= chunk.getSize();
+                    }
                 }
             });
         } catch (IOException e) {
@@ -145,10 +162,27 @@ public class PeerContainer implements Serializable {
     public synchronized ConcurrentHashMap<String, Integer> getOccurrences(){return occurrences;}
 
     /**
+     * Max Space Getter
+     * @return Max Space
+     */
+    public synchronized long getMaxSpace() {
+        return maxSpace;
+    }
+
+    /**
+     * Max Space Setter
+     * @param maxSpace new Max Space
+     */
+    public synchronized void setMaxSpace(long maxSpace) {
+        this.maxSpace = maxSpace;
+        saveState();
+    }
+
+    /**
      * Free Space Getter
      * @return Free Space
      */
-    public synchronized int getFreeSpace(){
+    public synchronized long getFreeSpace(){
         return freeSpace;
     }
 
@@ -156,7 +190,7 @@ public class PeerContainer implements Serializable {
      * Function used to add a File to the Stored Files array
      * @param file File that is gonna be added
      */
-    public void addStoredFile(FileManager file){
+    public synchronized void addStoredFile(FileManager file){
         this.storedFiles.add(file);
     }
 
@@ -184,6 +218,7 @@ public class PeerContainer implements Serializable {
             if(chunk.equals(storedChunk)) return false; // cant store equal chunks
         }
         this.storedChunks.add(chunk);
+        saveState();
         return true;
     }
 
@@ -221,17 +256,30 @@ public class PeerContainer implements Serializable {
     }
 
     /**
-     * Function used to increment the occurences of a chunk in a peer
+     * Function used to increment the occurrences of a chunk in a peer
      * @param fileID File ID from the chunk
      * @param chunkNo Chunk Number from the chunk
      */
-    public synchronized void incOccurences(String fileID, int chunkNo){
+    public synchronized void incOccurrences(String fileID, int chunkNo){
         String key = createKey(fileID, chunkNo);
         if(!containsOccurrence(key)) {
             this.occurrences.put(key, 1);
         } else {
             this.occurrences.replace(key, this.occurrences.get(key) + 1);
         }
+        saveState();
+    }
+    /**
+     * Function used to decrement the occurrences of a chunk in a peer
+     * @param fileID File ID from the chunk
+     * @param chunkNo Chunk Number from the chunk
+     */
+    public synchronized void decOccurrences(String fileID, int chunkNo){
+        String key = createKey(fileID, chunkNo);
+        if(containsOccurrence(key) && this.occurrences.get(key) > 0) {
+            this.occurrences.replace(key, this.occurrences.get(key) - 1);
+        }
+        saveState();
     }
 
     /**
@@ -264,37 +312,27 @@ public class PeerContainer implements Serializable {
      * Free Space Setter
      * @param freeSpace new Free Space
      */
-    public synchronized void setFreeSpace(int freeSpace){
+    public synchronized void setFreeSpace(long freeSpace){
         this.freeSpace = freeSpace;
+        saveState();
     }
 
     /**
      * Function used to decrement the free space
      * @param size amount of space that will be decremented
      */
-    public synchronized void decFreeSpace(int size){
+    public synchronized void decFreeSpace(long size){
         this.freeSpace -= size;
+        saveState();
     }
 
     /**
      * Function used to increment the free space
-     * @param fileID File ID of the chunk
-     * @param chunkNo Chunk Number of the chunk
+     * @param size amount of space that will be incremented
      */
-    public synchronized void incFreeSpace(String fileID, int chunkNo){
-        // chunk belongs to this peer
-        for(FileChunk storedChunk : this.storedChunks){
-            if(storedChunk.getFileID().equals(fileID) && storedChunk.getChunkNo() == chunkNo)
-                this.freeSpace += storedChunk.getSize();
-        }
-    }
-
-    /**
-     * Function used to get the Occupied Space
-     * @return Occupied Space
-     */
-    public synchronized int getTotalOccupiedSpace(){
-        return 8 * 1000000 - this.freeSpace;
+    public synchronized void incFreeSpace(long size){
+        this.freeSpace += size;
+        saveState();
     }
 
 }

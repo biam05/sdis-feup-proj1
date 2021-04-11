@@ -29,7 +29,7 @@ public class Delete {
         // Delete From FileSystem
         for(FileChunk chunk : peerContainer.getStoredChunks()) {
             if(chunk.getFileID().equals(fileId)){
-                peerContainer.incFreeSpace(chunk.getFileID(), chunk.getChunkNo());
+                peerContainer.incFreeSpace(chunk.getSize());
                 Executors.newScheduledThreadPool(5).schedule(() -> {
                     peerContainer.deleteStoredChunk(chunk);
                 }, 0, TimeUnit.SECONDS);

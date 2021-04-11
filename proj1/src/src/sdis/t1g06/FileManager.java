@@ -21,6 +21,8 @@ public class FileManager implements Serializable {
     private final int replicationDegree;
     private final ArrayList<FileChunk> chunks;
 
+    private boolean alreadyBackedUp;
+
     /**
      * FileManager Constructor
      * @param path Path of the File
@@ -31,6 +33,7 @@ public class FileManager implements Serializable {
         this.replicationDegree = replicationDegree;
         this.chunks = new ArrayList<>();
         this.fileID = id();
+        this.alreadyBackedUp = false;
         split();
     }
 
@@ -56,6 +59,22 @@ public class FileManager implements Serializable {
      */
     public ArrayList<FileChunk> getChunks(){
         return chunks;
+    }
+
+    /**
+     * Check if a file was already backed up
+     * @return True if the file was already backed up. False otherwise
+     */
+    public boolean isAlreadyBackedUp() {
+        return alreadyBackedUp;
+    }
+
+    /**
+     * Change if the file was already backed up
+     * @param alreadyBackedUp new value
+     */
+    public void setAlreadyBackedUp(boolean alreadyBackedUp) {
+        this.alreadyBackedUp = alreadyBackedUp;
     }
 
     /**

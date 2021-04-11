@@ -35,5 +35,11 @@ public interface ServiceInterface extends Remote {
      *                       the chunks
      * @return "Successful RECLAIM of space"
      */
-    String reclaim(int max_disk_space) throws RemoteException;
+    String reclaim(long max_disk_space) throws RemoteException;
+
+    /**
+     * Function used to print the state of the peer
+     * @return State of the peer
+     */
+    String state() throws RemoteException;
 }

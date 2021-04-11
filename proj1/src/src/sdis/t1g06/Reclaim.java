@@ -26,7 +26,7 @@ public class Reclaim {
     /**
      * Function used to perform the space reclaim
      */
-    public synchronized void performReclaim(){
+    public synchronized void performReclaim() {
         // TODO
     }
 

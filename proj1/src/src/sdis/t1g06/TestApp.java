@@ -100,7 +100,15 @@ public class TestApp {
                 System.out.println("Response: " + response);
             }
             // Get Internal State
-            case "STATE" -> System.out.println("> TestApp: STATE Operation");
+            case "STATE" -> {
+                System.out.println("> TestApp: STATE Operation");
+                if (args.length != 2){
+                    System.err.println("Wrong number of arguments given for STATE operation");
+                    return;
+                }
+                String response = stub.state();
+                System.out.println(response);
+            }
             default -> System.err.println("TestApp: Invalid operation requested");
         }
     }

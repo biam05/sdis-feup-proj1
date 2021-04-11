@@ -5,11 +5,12 @@ import java.io.Serializable;
 /**
  * FileChunk Class
  */
-public class FileChunk implements Serializable {
+public class FileChunk implements Serializable, Comparable<FileChunk> {
     private final String fileID;
     private final int chunkNo;
     private final int size;
     private final byte[] content;
+
     private int replicationDegree;
     private int desiredReplicationDegree;
 
@@ -68,11 +69,27 @@ public class FileChunk implements Serializable {
     }
 
     /**
+     * Replication Degree Getter
+     * @return Replication Degree of the Chunk
+     */
+    public int getReplicationDegree() {
+        return replicationDegree;
+    }
+
+    /**
      * Desired Replication Degree Setter
      * @param desiredReplicationDegree new Desired Replication Degree
      */
     public void setDesiredReplicationDegree(int desiredReplicationDegree) {
         this.desiredReplicationDegree = desiredReplicationDegree;
+    }
+
+    /**
+     * Desired Replication Degree Getter
+     * @return Desired Replication Degree of the Chunk
+     */
+    public int getDesiredReplicationDegree() {
+        return desiredReplicationDegree;
     }
 
     @Override
@@ -84,5 +101,10 @@ public class FileChunk implements Serializable {
         FileChunk c = (FileChunk) o;
 
         return (this.chunkNo == c.chunkNo && this.fileID.equals(c.fileID));
+    }
+
+    @Override
+    public int compareTo(FileChunk c) {
+        return Integer.compare(this.replicationDegree, c.replicationDegree);
     }
 }
