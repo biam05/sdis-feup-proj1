@@ -186,12 +186,17 @@ public class PeerContainer implements Serializable {
         return freeSpace;
     }
 
+
     /**
-     * Function used to add a File to the Stored Files array
-     * @param file File that is gonna be added
+     * Function used to add a FileManager to the Stored FileManager array
+     * @param file FileManager that is gonna be stored
      */
     public synchronized void addStoredFile(FileManager file){
+        for(FileManager storedFile : this.storedFiles){
+            if(file.equals(storedFile)) return; // cant store equal files
+        }
         this.storedFiles.add(file);
+        saveState();
     }
 
     /**
