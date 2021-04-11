@@ -15,7 +15,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
  * PeerContainer Class
  */
 public class PeerContainer implements Serializable {
-    public final static long PEER_DEFAULT_MAX_STORAGE = 8000000;
+    public final static long PEER_DEFAULT_MAX_STORAGE = 1000000000;
 
     private int pID;
     private ArrayList<FileManager> storedFiles;
