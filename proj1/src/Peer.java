@@ -36,6 +36,10 @@ public class Peer implements ServiceInterface {
     private static Channel mdb;
     private static Channel mdr;
 
+    private static Thread mc_thread;
+    private static Thread mdb_thread;
+    private static Thread mdr_thread;
+
     private static ServiceInterface stub = null;
     private static Registry registry = null;
 
@@ -337,9 +341,13 @@ public class Peer implements ServiceInterface {
         mdb = new Channel(peer_id, mdb_maddress, mdb_port, ChannelType.MDB);
         mdr = new Channel(peer_id, mdr_maddress, mdr_port, ChannelType.MDR);
 
-        new Thread(mc).start();
-        new Thread(mdb).start();
-        new Thread(mdr).start();
+        mc_thread = new Thread(mc);
+        mdb_thread = new Thread(mdb);
+        mdr_thread = new Thread(mdr);
+
+        mc_thread.start();
+        mdb_thread.start();
+        mdr_thread.start();
     }
 
     /**
