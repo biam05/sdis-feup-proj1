@@ -87,6 +87,25 @@ public class PeerContainer implements Serializable {
     }
 
     /**
+     * Function used to read the files physical state of the Peer's Filesystem and update the Peer's container with it
+     */
+    public synchronized void updateFilesState() {
+        // Register all files
+        try {
+            Files.walk(Paths.get("peer " + pID + "/files")).forEach(filePath -> {
+                if (!filePath.toFile().isDirectory()) {
+                    FileManager fileManager = new FileManager(Peer.getPeerPath(pID) + "files/" + filePath.getFileName().toString(), 0);
+                    if(!storedFiles.contains(fileManager)) {
+                        storedFiles.add(fileManager);
+                    }
+                }
+            });
+        } catch (IOException e) {
+            System.err.println("> Peer " + pID + ": Failed to iterate files of peer");
+        }
+    }
+
+    /**
      * Function used to read the physical state of the Peer's Filesystem and update the Peer's container with it
      */
     public synchronized void updateState() {
@@ -97,7 +116,6 @@ public class PeerContainer implements Serializable {
                     FileManager fileManager = new FileManager(Peer.getPeerPath(pID) + "files/" + filePath.getFileName().toString(), 0);
                     if(!storedFiles.contains(fileManager)) {
                         storedFiles.add(fileManager);
-                        freeSpace -= filePath.toFile().length();
                     }
                 }
             });

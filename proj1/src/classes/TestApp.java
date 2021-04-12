@@ -10,6 +10,9 @@ import java.util.Locale;
  */
 public class TestApp {
 
+    private static Registry registry;
+    private static ServiceInterface stub;
+
     /**
      * Main Function
      * @param args arguments passed in the command line
@@ -36,10 +39,8 @@ public class TestApp {
             return;
         }
 
-        ServiceInterface stub;
-
         try {
-            Registry registry = LocateRegistry.getRegistry();
+            registry = LocateRegistry.getRegistry();
             stub = (ServiceInterface) registry.lookup(args[0]);
         } catch (Exception e) {
             System.err.println("TestApp: App exception: " + e);

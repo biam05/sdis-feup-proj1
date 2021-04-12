@@ -69,8 +69,16 @@ public class Reclaim {
         if(!ownedChunk) {
             for(FileManager file : peerContainer.getStoredFiles()) {
                 if(file.getFileID().equals(fileId)) {
+                    boolean fileNoLongerBackedUp = true;
                     for(FileChunk chunk : file.getChunks()) {
-                        if(chunk.getChunkNo() == chunkNo) chunk.setReplicationDegree(peerContainer.getOccurrences().get(PeerContainer.createKey(fileId, chunkNo)));
+                        if(chunk.getChunkNo() == chunkNo) {
+                            chunk.setReplicationDegree(peerContainer.getOccurrences().get(PeerContainer.createKey(fileId, chunkNo)));
+                        }
+                        if(chunk.getReplicationDegree() > 0) fileNoLongerBackedUp = false;
+                    }
+                    if(fileNoLongerBackedUp) {
+                        System.out.println("> Peer " + pID + ": After this RECLAIM operation, no other peer's contained copies of the chunk so the file " + file.getFile().getName() + " is no longer backed up");
+                        file.setAlreadyBackedUp(false);
                     }
                 }
             }
