@@ -1,5 +1,7 @@
 package sdis.t1g06;
 
+import java.net.ConnectException;
+import java.rmi.ConnectIOException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
@@ -43,7 +45,8 @@ public class TestApp {
             registry = LocateRegistry.getRegistry();
             stub = (ServiceInterface) registry.lookup(args[0]);
         } catch (Exception e) {
-            System.err.println("TestApp: App exception: " + e);
+            System.err.println("> TestApp: RMI Registry exception");
+            System.err.println("Verify if both the RMI and the peer are running");
             return;
         }
 
@@ -64,7 +67,14 @@ public class TestApp {
                     System.err.println("Replication degree given is not a number");
                     return;
                 }
-                String response = stub.backup(file_name, replicationDegree);
+                String response;
+                try {
+                    response = stub.backup(file_name, replicationDegree);
+                } catch (Exception e) {
+                    System.err.println("> TestApp: Connection exception");
+                    System.err.println("Verify if both the RMI and the peer are running");
+                    return;
+                }
                 System.out.println("Response: " + response);
             }
             // Restore a File
@@ -75,7 +85,14 @@ public class TestApp {
                     return;
                 }
                 String file_name = args[2];
-                String response = stub.restore(file_name);
+                String response;
+                try {
+                    response = stub.restore(file_name);
+                } catch (Exception e) {
+                    System.err.println("> TestApp: Connection exception");
+                    System.err.println("Verify if both the RMI and the peer are running");
+                    return;
+                }
                 System.out.println("Response: " + response);
             }
             // Delete a File
@@ -86,7 +103,14 @@ public class TestApp {
                     return;
                 }
                 String file_name = args[2];
-                String response = stub.delete(file_name);
+                String response;
+                try {
+                    response = stub.delete(file_name);
+                } catch (Exception e) {
+                    System.err.println("> TestApp: Connection exception");
+                    System.err.println("Verify if both the RMI and the peer are running");
+                    return;
+                }
                 System.out.println("Response: " + response);
             }
             // Reclaim Space
@@ -97,7 +121,14 @@ public class TestApp {
                     return;
                 }
                 int space = Integer.parseInt(args[2]);
-                String response = stub.reclaim(space); // TODO - TEST RECLAIM
+                String response;
+                try {
+                    response = stub.reclaim(space);
+                } catch (Exception e) {
+                    System.err.println("> TestApp: Connection exception");
+                    System.err.println("Verify if both the RMI and the peer are running");
+                    return;
+                }
                 System.out.println("Response: " + response);
             }
             // Get Internal State
@@ -107,7 +138,14 @@ public class TestApp {
                     System.err.println("Wrong number of arguments given for STATE operation");
                     return;
                 }
-                String response = stub.state();
+                String response;
+                try {
+                    response = stub.state();
+                } catch (Exception e) {
+                    System.err.println("> TestApp: Connection exception");
+                    System.err.println("Verify if both the RMI and the peer are running");
+                    return;
+                }
                 System.out.println(response);
             }
             default -> System.err.println("TestApp: Invalid operation requested");
