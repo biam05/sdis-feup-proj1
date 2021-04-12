@@ -80,4 +80,4 @@ esac
 
 # echo "java test.TestApp ${pap} ${oper} ${opernd_1} ${rep_deg}"
 
-java test.TestApp ${pap} ${oper} ${opernd_1} ${rep_deg}
+java sdis.t1g06.TestApp ${pap} ${oper} ${opernd_1} ${rep_deg}

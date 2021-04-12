@@ -33,6 +33,6 @@ mdr_port=$9
 # Should not need to change anything but the class and its package, unless you use any jar file
 
 # echo "java peer.Peer ${ver} ${id} ${sap} ${mc_addr} ${mc_port} ${mdb_addr} ${mdb_port} ${mdr_addr} ${mdr_port}"
+java -Djava.rmi.server.codebase=sdis/t1g06/ -Djava.security.manager -Djava.security.policy=../rmipolicy/my.policy/ sdis.t1g06.Peer ${ver} ${id} ${sap} ${mc_addr} ${mc_port} ${mdb_addr} ${mdb_port} ${mdr_addr} ${mdr_port}
 
-java peer.Peer ${ver} ${id} ${sap} ${mc_addr} ${mc_port} ${mdb_addr} ${mdb_port} ${mdr_addr} ${mdr_port}
 

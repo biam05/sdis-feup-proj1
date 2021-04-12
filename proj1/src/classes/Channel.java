@@ -34,6 +34,7 @@ enum ChannelType {
 /**
  * Channel Class
  */
+@SuppressWarnings("deprecation")
 public class Channel extends Thread {
     private final int peer_id;
     private final int mport;
