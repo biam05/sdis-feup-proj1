@@ -392,10 +392,11 @@ public class Peer implements ServiceInterface {
             }
 
             sendMessagePUTCHUNKProtocol(message, fileChunk, replicationDegree, 1);
-            System.out.println("> Peer " + peer_id + ": Started BACKUP protocol of chunk nº" + fileChunk.getChunkNo() + " of file with file ID: " + fileChunk.getFileID());
+            System.out.println("> Peer " + peer_id + ": Started BACKUP protocol of chunk n." + fileChunk.getChunkNo() + " of file with file ID: " + fileChunk.getFileID());
         }
-
+        
         filemanager.setAlreadyBackedUp(true);
+
         return "BACKUP protocol of file " + file_name + " successfully initiated";
     }
 
@@ -469,7 +470,7 @@ public class Peer implements ServiceInterface {
                 byte[] message = header.getBytes();
 
                 sendMessageREMOVEProtocol(message);
-                System.out.println("> Peer " + peer_id + ": Started BACKUP protocol of chunk nº" + storedChunk.getChunkNo() + " of file with file ID: " + storedChunk.getFileID());
+                System.out.println("> Peer " + peer_id + ": Started BACKUP protocol of chunk n." + storedChunk.getChunkNo() + " of file with file ID: " + storedChunk.getFileID());
             }
             for(FileChunk chunk : toBeDeleted) {
                 peerContainer.getStoredChunks().removeIf(c -> c.equals(chunk));
@@ -558,14 +559,14 @@ public class Peer implements ServiceInterface {
         peerExecutors.schedule(() -> {
             if(actual_rep_degree == null || actual_rep_degree < replicationDegree) {
                 if(waitTime * 2 > 16) {
-                    System.out.println("> Peer " + peer_id + ": BACKUP protocol of chunk nº" + fileChunk.getChunkNo() + " of file with file ID: " + fileChunk.getFileID() + " finished, but desired replication degree not met");
+                    System.out.println("> Peer " + peer_id + ": BACKUP protocol of chunk n." + fileChunk.getChunkNo() + " of file with file ID: " + fileChunk.getFileID() + " finished, but desired replication degree not met");
                     return;
                 }
                 sendMessagePUTCHUNKProtocol(message, fileChunk, replicationDegree, waitTime * 2);
             } else {
                 fileChunk.setReplicationDegree(actual_rep_degree);
                 peerContainer.saveState();
-                System.out.println("> Peer " + peer_id + ": BACKUP protocol of chunk nº" + fileChunk.getChunkNo() + " of file with file ID: " + fileChunk.getFileID() + " finished");
+                System.out.println("> Peer " + peer_id + ": BACKUP protocol of chunk n." + fileChunk.getChunkNo() + " of file with file ID: " + fileChunk.getFileID() + " finished");
             }
         }, waitTime, TimeUnit.SECONDS);
     }
