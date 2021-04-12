@@ -20,6 +20,8 @@ else
 	exit 1
 fi
 
+rm -r "peer "${peer_id}/*
+
 # Clean the directory tree for storing files
 # For a crash course on shell commands check for example:
 # Command line basi commands from GitLab Docs':	https://docs.gitlab.com/ee/gitlab-basics/command-line-commands.html

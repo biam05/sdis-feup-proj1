@@ -80,4 +80,4 @@ esac
 
 # echo "java test.TestApp ${pap} ${oper} ${opernd_1} ${rep_deg}"
 
-java test.TestApp ${pap} ${oper} ${opernd_1} ${rep_deg}
+java -XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC -XX:+AlwaysPreTouch -Xms2G -Xmx2G sdis.t1g06.TestApp ${pap} ${oper} ${opernd_1} ${rep_deg}

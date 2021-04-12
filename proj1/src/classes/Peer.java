@@ -14,9 +14,6 @@ import java.util.Collections;
 import java.util.Random;
 import java.util.concurrent.*;
 
-// TODO: Remove all unecessary printlns
-//    On RESTORE protocol, add check that verifies if another CHUNK message arrives before the his own CHUNK message leavs
-
 /**
  * Peer Class - Represents a Peer used in the Distributed Backup Service
  */
@@ -38,6 +35,9 @@ public class Peer implements ServiceInterface {
     private static Channel mc;
     private static Channel mdb;
     private static Channel mdr;
+
+    private static ServiceInterface stub = null;
+    private static Registry registry = null;
 
     private static final ScheduledThreadPoolExecutor peerExecutors = new ScheduledThreadPoolExecutor(MAX_THREADS);
 
@@ -174,9 +174,9 @@ public class Peer implements ServiceInterface {
             System.setSecurityManager(new SecurityManager());
         }
         try {
-            ServiceInterface stub = (ServiceInterface) UnicastRemoteObject.exportObject(this, 0);
-            Registry registry = LocateRegistry.getRegistry();
-            registry.bind(peer_id + "", stub);
+            stub = (ServiceInterface) UnicastRemoteObject.exportObject(this, 0);
+            registry = LocateRegistry.getRegistry();
+            registry.rebind(service_access_point, stub);
             System.out.println("> Peer " + peer_id + ": RMI service registered");
         } catch (Exception e) {
             System.err.println("> Peer " + peer_id + ": Failed to register RMI service");
@@ -352,6 +352,7 @@ public class Peer implements ServiceInterface {
 
     @Override
     public synchronized String backup(String file_name, int replicationDegree) { // Called by the initiator peer
+        peerContainer.updateFilesState();
         FileManager filemanager = null;
         for(FileManager file : peerContainer.getStoredFiles())
             if(file.getFile().getName().equals(file_name)) filemanager = file;
@@ -360,7 +361,6 @@ public class Peer implements ServiceInterface {
             System.out.println("This file is already backed up, ignoring command");
             return "Unsuccessful BACKUP of file " + file_name + ", backup of this file already exists";
         }
-        peerContainer.addStoredFile(filemanager);
 
         for(int i = 0; i < filemanager.getChunks().size(); i++) {
             FileChunk fileChunk = filemanager.getChunks().get(i);
@@ -393,6 +393,7 @@ public class Peer implements ServiceInterface {
 
     @Override
     public String restore(String file_name) throws RemoteException {
+        peerContainer.updateFilesState();
         for(FileManager file : peerContainer.getStoredFiles()) {
             if(file.getFile().getName().equals(file_name)) {
                 long file_size = (long) (file.getChunks().size() - 1) * FileManager.CHUNK_MAX_SIZE + file.getChunks().get(file.getChunks().size()-1).getSize();
@@ -416,6 +417,7 @@ public class Peer implements ServiceInterface {
 
     @Override
     public String delete(String file_name) throws RemoteException{
+        peerContainer.updateFilesState();
         for(FileManager file : peerContainer.getStoredFiles()) {
             if(file.getFile().getName().equals(file_name)) {
                 // <Version> DELETE <SenderId> <FileId> <CRLF><CRLF>
@@ -426,8 +428,7 @@ public class Peer implements ServiceInterface {
 
                 sendMessageDELETEProtocol(message);
                 peerContainer.clearFileOccurences(file);
-                peerContainer.deleteStoredFile(file);
-                peerContainer.incFreeSpace(file.getFile().length());
+                file.setAlreadyBackedUp(false);
                 break;
             }
         }
@@ -436,6 +437,7 @@ public class Peer implements ServiceInterface {
 
     @Override
     public String reclaim(long max_disk_space) throws RemoteException {
+        peerContainer.updateFilesState();
         long space_to_free = peerContainer.getFreeSpace() - max_disk_space;
         ArrayList<FileChunk> toBeDeleted = new ArrayList<>();
         if(space_to_free > 0) { // has to delete files
@@ -452,9 +454,7 @@ public class Peer implements ServiceInterface {
                 peerContainer.deleteStoredChunk(storedChunk);
                 peerContainer.incFreeSpace(storedChunk.getSize());
                 System.out.println(storedChunk.getDesiredReplicationDegree());
-                // header construction
                 // <Version> REMOVED <SenderId> <FileId> <ChunkNo> <CRLF><CRLF>
-                //      CRLF == \r\n
                 String header = protocol_version + " REMOVED " + peer_id + " " + storedChunk.getFileID() +
                         " " + storedChunk.getChunkNo() + " \r\n\r\n";
 
@@ -475,6 +475,7 @@ public class Peer implements ServiceInterface {
 
     @Override
     public String state() throws RemoteException{
+        peerContainer.updateFilesState();
         int nFile = 1;
         int nChunk = 1;
         StringBuilder state = new StringBuilder();
