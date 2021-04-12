@@ -82,8 +82,7 @@ public class FileManager implements Serializable {
      */
     private synchronized void split() {
         int chunkNo = 0; // number of the first chunk
-        int maxSize = CHUNK_MAX_SIZE; // max size of chunk = 64kB
-        byte[] buffer = new byte[maxSize]; // buffer with the size of the chunk
+        byte[] buffer = new byte[CHUNK_MAX_SIZE]; // buffer with the size of the chunk
 
         try(FileInputStream fileInputStream = new FileInputStream(this.file);
             BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream)){
@@ -93,18 +92,17 @@ public class FileManager implements Serializable {
                 FileChunk fileChunk = new FileChunk(this.fileID, chunkNo, content, size);
                 this.chunks.add(fileChunk);
                 chunkNo++; // number of the next chunk
-                buffer = new byte[maxSize]; // prepare to get next chunk
+                buffer = new byte[CHUNK_MAX_SIZE]; // prepare to get next chunk
             }
             // If the file size is a multiple of the chunk size, the last chunk has size 0
-            if(this.file.length() % maxSize == 0){
+            if(this.file.length() % CHUNK_MAX_SIZE == 0){
                 FileChunk fileChunk = new FileChunk(this.fileID, chunkNo, null, 0);
                 this.chunks.add(fileChunk);
             }
         } catch (FileNotFoundException fe) {
             System.err.println("The file " + this.file.getName() + " does not exist in this peer");
         } catch(Exception e) {
-            System.err.println("Error splitting " + this.file.getName() + " file in chunks.\n");
-            e.printStackTrace();
+            System.err.println("Error splitting " + this.file.getName() + " file in chunks.");
         }
     }
 
